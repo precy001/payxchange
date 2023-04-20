@@ -12,7 +12,6 @@ import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PayoutDestinationsModule } from '../payout-destinations/payout-destinations.module';
-import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
   imports: [
@@ -23,7 +22,6 @@ import { ReferralsModule } from '../referrals/referrals.module';
     AuthModule, // AuthService (PIN verification)
     NotificationsModule, // push alerts on completion
     PayoutDestinationsModule, // payee's saved bank account
-    ReferralsModule, // qualify referrals on completion
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService, TransactionsRepository, PayoutService, OutboxWorker, ExpirySweeper],

@@ -23,7 +23,7 @@ import FreezeAccountScreen from '../screens/FreezeAccountScreen';
 import SessionsScreen from '../screens/SessionsScreen';
 import CardsScreen from '../screens/CardsScreen';
 import PayoutAccountScreen from '../screens/PayoutAccountScreen';
-import ReferralScreen from '../screens/ReferralScreen';
+import DailyRewardScreen from '../screens/DailyRewardScreen';
 import ReportProblemScreen from '../screens/ReportProblemScreen';
 import DisputesScreen from '../screens/DisputesScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
@@ -53,7 +53,7 @@ export type RootStackParamList = {
   Sessions: undefined;
   Cards: undefined;
   PayoutAccount: undefined;
-  Referral: undefined;
+  DailyReward: undefined;
   ReportProblem: { txn: Txn };
   Disputes: undefined;
   TransactionDetail: { txn: Txn };
@@ -102,7 +102,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Sessions" component={SessionsScreen} />
           <Stack.Screen name="Cards" component={CardsScreen} />
           <Stack.Screen name="PayoutAccount" component={PayoutAccountScreen} />
-          <Stack.Screen name="Referral" component={ReferralScreen} />
+          <Stack.Screen name="DailyReward" component={DailyRewardScreen} />
           <Stack.Screen name="ReportProblem" component={ReportProblemScreen} />
           <Stack.Screen name="Disputes" component={DisputesScreen} />
           <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />

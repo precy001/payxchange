@@ -160,8 +160,8 @@ export default function ProfileScreen() {
         <View style={styles.divider} />
         <Row
           icon="gift-outline"
-          label="Refer & Earn ₦15,000"
-          onPress={() => navigation.navigate('Referral')}
+          label="Daily Reward · Earn ₦15,000"
+          onPress={() => navigation.navigate('DailyReward')}
         />
         <View style={styles.divider} />
         <Row

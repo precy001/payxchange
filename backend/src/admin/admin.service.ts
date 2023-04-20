@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../infra/database.module';
+import { DailyRewardsRepository } from '../daily-rewards/daily-rewards.repository';
 
 // Constant-time string compare so login can't be timed to guess the password.
 function safeEqual(a: string, b: string): boolean {
@@ -16,6 +17,7 @@ export class AdminService {
   constructor(
     private readonly jwt: JwtService,
     private readonly db: DatabaseService,
+    private readonly dailyRewardsRepo: DailyRewardsRepository,
   ) {}
 
   async login(username: string, password: string) {
@@ -36,20 +38,19 @@ export class AdminService {
 
   async stats() {
     const q = async (sql: string) => Number((await this.db.query<{ n: string }>(sql)).rows[0]?.n ?? 0);
-    const [users, txns, completed, referralsQualified, disputesOpen, rewardsClaimed] = await Promise.all([
+    const [users, txns, completed, disputesOpen, dailyClaimsToday] = await Promise.all([
       q(`SELECT COUNT(*)::int n FROM users`),
       q(`SELECT COUNT(*)::int n FROM transactions`),
       q(`SELECT COUNT(*)::int n FROM transactions WHERE state = 'completed'`),
-      q(`SELECT COUNT(*)::int n FROM referrals WHERE status = 'qualified'`),
       q(`SELECT COUNT(*)::int n FROM disputes WHERE status = 'open'`),
-      q(`SELECT COUNT(*)::int n FROM users WHERE referral_reward_claimed_at IS NOT NULL`),
+      this.dailyRewardsRepo.claimsTodayCount(),
     ]);
     const volume = Number(
       (await this.db.query<{ v: string }>(
         `SELECT COALESCE(SUM(amount_kobo),0)::bigint v FROM transactions WHERE state = 'completed'`,
       )).rows[0]?.v ?? 0,
     );
-    return { users, txns, completed, volumeKobo: volume, referralsQualified, disputesOpen, rewardsClaimed };
+    return { users, txns, completed, volumeKobo: volume, disputesOpen, dailyClaimsToday };
   }
 
   async users(limit = 100) {
@@ -75,25 +76,11 @@ export class AdminService {
     return res.rows;
   }
 
-  // Referral verification view: per referrer — code, signed-up, qualified, and
-  // whether they've hit the threshold / already claimed. This is what an admin
-  // uses to verify a claim before paying out.
-  async referrals() {
-    const res = await this.db.query(
-      `SELECT u.id,
-              u.phone,
-              u.full_name,
-              u.referral_code,
-              u.referral_reward_claimed_at,
-              COUNT(r.*)::int                                      AS signed_up,
-              COUNT(r.*) FILTER (WHERE r.status = 'qualified')::int AS qualified
-         FROM users u
-         LEFT JOIN referrals r ON r.referrer_user_id = u.id
-        GROUP BY u.id
-        HAVING COUNT(r.*) > 0
-        ORDER BY qualified DESC, signed_up DESC`,
-    );
-    return res.rows;
+  // Daily reward verification view: everyone with counted transactions today,
+  // their running total, and whether they've already claimed today. This is
+  // what an admin uses to verify a claim (counted >= 50) before paying out.
+  async dailyRewards() {
+    return this.dailyRewardsRepo.adminToday();
   }
 
   async disputes(limit = 100) {

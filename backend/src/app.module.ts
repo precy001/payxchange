@@ -16,7 +16,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { PayoutDestinationsModule } from './payout-destinations/payout-destinations.module';
-import { ReferralsModule } from './referrals/referrals.module';
+import { DailyRewardsModule } from './daily-rewards/daily-rewards.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health/health.controller';
 
@@ -42,7 +42,7 @@ import { HealthController } from './health/health.controller';
     NotificationsModule,
     DisputesModule,
     PayoutDestinationsModule,
-    ReferralsModule,
+    DailyRewardsModule,
     AdminModule,
   ],
   controllers: [HealthController],

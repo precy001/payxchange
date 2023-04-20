@@ -40,9 +40,9 @@ export class AdminController {
   }
 
   @UseGuards(AdminGuard)
-  @Get('referrals')
-  referrals() {
-    return this.service.referrals();
+  @Get('daily-rewards')
+  dailyRewards() {
+    return this.service.dailyRewards();
   }
 
   @UseGuards(AdminGuard)
