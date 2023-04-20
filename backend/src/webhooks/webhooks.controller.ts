@@ -40,8 +40,13 @@ export class WebhooksController {
   @Post('simulate')
   async simulate(@Body() body: { transactionId: string; outcome: 'success' | 'failed' }) {
     const driver = this.config.get('paymentsDriver');
-    const env = this.config.get('nodeEnv');
-    if (driver !== 'mock' && env === 'production') {
+    // Always fine on the mock driver — no real money is ever involved there.
+    // On a REAL provider (paystack/nomba), this must be explicitly opted into
+    // via its own flag, independent of NODE_ENV — so it can never stay open
+    // just because NODE_ENV isn't 'production' (e.g. while DEV_OTP is on for
+    // testing). Off by default.
+    const allowed = driver === 'mock' || process.env.ALLOW_WEBHOOK_SIMULATOR === 'true';
+    if (!allowed) {
       throw new ForbiddenException('Webhook simulator is disabled');
     }
     const payload = {

@@ -42,6 +42,20 @@ async function bootstrap() {
 
   // Ensure DB pool + Redis close cleanly on SIGTERM/SIGINT.
   app.enableShutdownHooks();
+
+  // Loud, impossible-to-miss reminder whenever a risky testing flag is left on
+  // — especially easy to forget once real money is flowing.
+  const bootLogger = new Logger('Bootstrap');
+  if (process.env.DEV_OTP === 'true') {
+    bootLogger.warn('⚠️  DEV_OTP=true — OTP codes are being returned in API responses. Turn off before public launch.');
+  }
+  if (process.env.ALLOW_WEBHOOK_SIMULATOR === 'true') {
+    bootLogger.warn('⚠️  ALLOW_WEBHOOK_SIMULATOR=true — /webhooks/simulate is open with NO signature check. Turn off before public launch.');
+  }
+  if (process.env.PAYOUT_MODE === 'simulate') {
+    bootLogger.warn('⚠️  PAYOUT_MODE=simulate — payouts are FAKED (no real transfer sent). Do not combine with real card charges.');
+  }
+
 const port = process.env.PORT ?? 3000;
 await app.listen(port, '0.0.0.0');
   new Logger('Bootstrap').log(`ScanPay backend listening on http://localhost:${port}`);

@@ -62,8 +62,13 @@ export class AuthService {
   // In beta (non-production) we hand the OTP straight back so testers can register
   // without real SMS. In production this returns nothing and the code only goes
   // out by SMS — so it can never leak to real users.
+  // Beta convenience: hand the OTP straight back to the caller so testers can
+  // register without real SMS (e.g. while an SMS provider subscription is
+  // paused). Gated on its OWN flag — deliberately NOT tied to NODE_ENV — so it
+  // can be toggled independently even while NODE_ENV=production and real
+  // payments are live. Off by default; must be explicitly enabled.
   private devCode(code: string): { devCode?: string } {
-    return process.env.NODE_ENV === 'production' ? {} : { devCode: code };
+    return process.env.DEV_OTP === 'true' ? { devCode: code } : {};
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
