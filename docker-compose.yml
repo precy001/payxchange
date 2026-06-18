@@ -1,0 +1,42 @@
+# ScanPay — local development infrastructure.
+# Brings up Postgres (with the schema auto-applied) and Redis.
+# Dev only: the password here is not a secret and must never be used in prod.
+
+services:
+  db:
+    image: postgres:16
+    container_name: scanpay-db
+    environment:
+      POSTGRES_USER: scanpay
+      POSTGRES_PASSWORD: scanpay_dev_pw
+      POSTGRES_DB: scanpay
+    ports:
+      - "5432:5432"
+    volumes:
+      - scanpay_pgdata:/var/lib/postgresql/data
+      # Any .sql file in ./db runs automatically the FIRST time the volume is
+      # created (empty). Put 0001_init.sql in a ./db folder next to this file.
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scanpay -d scanpay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: scanpay-redis
+    command: ["redis-server", "--appendonly", "yes"]  # persist to disk
+    ports:
+      - "6379:6379"
+    volumes:
+      - scanpay_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  scanpay_pgdata:
+  scanpay_redisdata:
