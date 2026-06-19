@@ -27,9 +27,13 @@ export class NombaProvider implements PaymentProvider {
     private readonly config: ConfigService,
   ) {}
 
-  // Nomba charge amounts are naira (major unit). Our core is kobo. One place.
+  // Nomba charge amounts are naira (major unit). Our core is kobo. Convert
+  // using integer math only — never floating point — so there's zero chance of
+  // a rounding artifact on a money value.
   private koboToNaira(kobo: number): string {
-    return (kobo / 100).toFixed(2);
+    const naira = Math.trunc(kobo / 100);
+    const remainder = Math.abs(kobo % 100);
+    return `${naira}.${String(remainder).padStart(2, '0')}`;
   }
 
   async chargeTokenizedCard(input: ChargeTokenizedCardInput): Promise<ChargeResult> {

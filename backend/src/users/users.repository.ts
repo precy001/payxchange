@@ -7,6 +7,7 @@ export interface UserRow {
   email: string | null;
   full_name: string | null;
   kyc: string;
+  phone_verified: boolean;
   created_at: string;
 }
 
@@ -26,7 +27,7 @@ export class UsersRepository {
       const inserted = await client.query<UserRow>(
         `INSERT INTO users (phone, email, full_name)
          VALUES ($1, $2, $3)
-         RETURNING id, phone, email, full_name, kyc, created_at`,
+         RETURNING id, phone, email, full_name, kyc, phone_verified, created_at`,
         [input.phone, input.email ?? null, input.fullName ?? null],
       );
       const user = inserted.rows[0];
@@ -43,10 +44,23 @@ export class UsersRepository {
 
   async findById(id: string): Promise<UserRow | null> {
     const res = await this.db.query<UserRow>(
-      `SELECT id, phone, email, full_name, kyc, created_at
+      `SELECT id, phone, email, full_name, kyc, phone_verified, created_at
          FROM users WHERE id = $1`,
       [id],
     );
     return res.rows[0] ?? null;
+  }
+
+  async findByPhone(phone: string): Promise<UserRow | null> {
+    const res = await this.db.query<UserRow>(
+      `SELECT id, phone, email, full_name, kyc, phone_verified, created_at
+         FROM users WHERE phone = $1`,
+      [phone],
+    );
+    return res.rows[0] ?? null;
+  }
+
+  async markPhoneVerified(id: string): Promise<void> {
+    await this.db.query(`UPDATE users SET phone_verified = true WHERE id = $1`, [id]);
   }
 }

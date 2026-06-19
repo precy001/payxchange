@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   GoneException,
   HttpException,
@@ -91,6 +92,22 @@ export class TransactionsService {
 
   // ---- CONFIRM: payer approves -> charge -> PAYER_CHARGED + ledger ----------
   async confirm(id: string) {
+    // Per-transaction mutex: stops two concurrent confirms from BOTH reaching
+    // the charge step (which would charge the card twice while recording it
+    // once). The TTL guarantees the lock can't get stuck if a process dies.
+    const lockKey = `lock:confirm:${id}`;
+    const gotLock = await this.redis.set(lockKey, '1', 'PX', 15_000, 'NX');
+    if (!gotLock) {
+      throw new ConflictException('A confirmation for this transaction is already in progress');
+    }
+    try {
+      return await this.runConfirm(id);
+    } finally {
+      await this.redis.del(lockKey).catch(() => undefined);
+    }
+  }
+
+  private async runConfirm(id: string) {
     let txn = await this.txns.findById(id);
     if (!txn) throw new NotFoundException('Transaction not found');
 

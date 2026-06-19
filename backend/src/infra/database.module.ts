@@ -29,9 +29,15 @@ export class DatabaseService implements OnModuleDestroy {
     // Neon (and most managed Postgres) require TLS. node-postgres needs the
     // ssl option set explicitly even when the URL says sslmode=require.
     const needsSsl = /sslmode=require/.test(url) || /neon\.tech/.test(url);
+    // Verify the server's certificate by default (prevents man-in-the-middle).
+    // Only relax this if your provider needs a custom CA and you can't supply
+    // one yet — set DATABASE_SSL_REJECT_UNAUTHORIZED=false. Neon's certs are
+    // publicly trusted, so verification should "just work".
+    const rejectUnauthorized =
+      (process.env.DATABASE_SSL_REJECT_UNAUTHORIZED ?? 'true') !== 'false';
     this.pool = new Pool({
       connectionString: url,
-      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+      ssl: needsSsl ? { rejectUnauthorized } : undefined,
       max: 10, // pool size; tune per deployment
     });
   }
