@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { CreatePaymentRequestDto } from './dto/create-payment-request.dto';
 import { PaymentRequestsService } from './payment-requests.service';
 
@@ -6,13 +7,13 @@ import { PaymentRequestsService } from './payment-requests.service';
 export class PaymentRequestsController {
   constructor(private readonly service: PaymentRequestsService) {}
 
-  // POST /payment-requests — payee creates a request, gets back a QR.
+  // POST /payment-requests — the payee (from token) creates a request + QR.
   @Post()
-  create(@Body() dto: CreatePaymentRequestDto) {
-    return this.service.create(dto);
+  create(@CurrentUser() userId: string, @Body() dto: CreatePaymentRequestDto) {
+    return this.service.create(userId, dto);
   }
 
-  // GET /payment-requests/resolve/:token — payer's app reads a scanned code.
+  // GET /payment-requests/resolve/:token — payer previews a scanned code.
   @Get('resolve/:token')
   resolve(@Param('token') token: string) {
     return this.service.resolve(token);

@@ -11,6 +11,7 @@ export interface PublicUser {
   email: string | null;
   fullName: string | null;
   kyc: string;
+  avatar: string | null;
   createdAt: string;
 }
 
@@ -51,6 +52,7 @@ export class UsersService {
       email: u.email,
       fullName: u.full_name,
       kyc: u.kyc,
+      avatar: u.avatar,
       createdAt: u.created_at,
     };
   }

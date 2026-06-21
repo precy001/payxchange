@@ -9,15 +9,13 @@ const FK_VIOLATION = '23503';
 export class FundingSourcesService {
   constructor(private readonly repo: FundingSourcesRepository) {}
 
-  async create(dto: CreateFundingSourceDto) {
-    // The payer's first card becomes their default automatically.
-    const existing = await this.repo.countForUser(dto.userId);
-    // A fake token standing in for what Nomba returns after real tokenization.
+  async create(userId: string, dto: CreateFundingSourceDto) {
+    const existing = await this.repo.countForUser(userId);
     const squadRef = `mock_tok_${crypto.randomBytes(8).toString('hex')}`;
 
     try {
       const row = await this.repo.create({
-        userId: dto.userId,
+        userId,
         type: 'card',
         squadRef,
         brand: dto.brand ?? 'mockcard',
@@ -48,7 +46,6 @@ export class FundingSourcesService {
       status: r.status,
       isDefault: r.is_default,
       createdAt: r.created_at,
-      // note: squad_ref (the token) is intentionally NOT returned to clients
     };
   }
 }

@@ -21,6 +21,7 @@ import {
 import { FundingSourcesRepository } from '../funding-sources/funding-sources.repository';
 import { PaymentRequestsRepository } from '../payment-requests/payment-requests.repository';
 import { UsersRepository } from '../users/users.repository';
+import { AuthService } from '../auth/auth.service';
 import { TransactionRow, TransactionsRepository } from './transactions.repository';
 
 @Injectable()
@@ -33,6 +34,7 @@ export class TransactionsService {
     private readonly funding: FundingSourcesRepository,
     private readonly requests: PaymentRequestsRepository,
     private readonly users: UsersRepository,
+    private readonly auth: AuthService,
     @Inject(REDIS) private readonly redis: Redis,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
@@ -91,7 +93,7 @@ export class TransactionsService {
   }
 
   // ---- CONFIRM: payer approves -> charge -> PAYER_CHARGED + ledger ----------
-  async confirm(id: string) {
+  async confirm(id: string, userId: string, pin: string) {
     // Per-transaction mutex: stops two concurrent confirms from BOTH reaching
     // the charge step (which would charge the card twice while recording it
     // once). The TTL guarantees the lock can't get stuck if a process dies.
@@ -101,15 +103,24 @@ export class TransactionsService {
       throw new ConflictException('A confirmation for this transaction is already in progress');
     }
     try {
-      return await this.runConfirm(id);
+      return await this.runConfirm(id, userId, pin);
     } finally {
       await this.redis.del(lockKey).catch(() => undefined);
     }
   }
 
-  private async runConfirm(id: string) {
+  private async runConfirm(id: string, userId: string, pin: string) {
     let txn = await this.txns.findById(id);
     if (!txn) throw new NotFoundException('Transaction not found');
+
+    // Only the payer may confirm their own transaction.
+    if (txn.payer_user_id !== userId) {
+      throw new ForbiddenException('You cannot confirm this transaction');
+    }
+
+    // Step-up authorization: the PIN must be re-entered to move money. This
+    // also enforces lockout, so a stolen unlocked phone can't drain the card.
+    await this.auth.verifyPinOrThrow(userId, pin);
 
     // Idempotent: if it's already charged, just return it.
     if (txn.state === 'payer_charged') return this.toPublic(txn);
@@ -157,6 +168,12 @@ export class TransactionsService {
           { account: `payer:${moved.payer_user_id}`, direction: 'debit', amountKobo: moved.amount_kobo },
           { account: 'platform:settlement', direction: 'credit', amountKobo: moved.amount_kobo },
         ]);
+        // Transactional outbox: queue the payout leg. Committed atomically with
+        // the charge, so the payout job exists iff the charge succeeded.
+        await this.txns.insertOutbox(c, id, 'payout.requested', {
+          transactionId: id,
+          amountKobo: moved.amount_kobo,
+        });
         return moved;
       });
       const finalRow = result ?? (await this.txns.findById(id))!;
@@ -174,10 +191,89 @@ export class TransactionsService {
     );
   }
 
-  async getById(id: string) {
+  async getById(id: string, userId: string) {
     const txn = await this.txns.findById(id);
     if (!txn) throw new NotFoundException('Transaction not found');
+    if (txn.payer_user_id !== userId && txn.payee_user_id !== userId) {
+      throw new ForbiddenException('You cannot view this transaction');
+    }
     return this.toPublic(txn);
+  }
+
+  // Transaction history for the feed, framed from the viewer's perspective.
+  async listForUser(userId: string) {
+    const rows = await this.txns.listByUser(userId);
+    return rows.map((r) => {
+      const direction = r.payer_user_id === userId ? 'sent' : 'received';
+      const counterparty = direction === 'sent' ? r.payee_name : r.payer_name;
+      return {
+        id: r.id,
+        direction,
+        counterparty: counterparty ?? 'PayXchange user',
+        description: r.description ?? '',
+        amountKobo: Number(r.amount_kobo),
+        currency: r.currency,
+        state: r.state,
+        createdAt: r.created_at,
+      };
+    });
+  }
+
+  // OPay-style monthly view: in/out totals, a weekly series for the chart, and
+  // the month's transactions. `month` is 'YYYY-MM' (defaults to this month).
+  async monthlySummary(userId: string, month?: string) {
+    const now = new Date();
+    let year = now.getUTCFullYear();
+    let mon = now.getUTCMonth(); // 0-based
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [y, m] = month.split('-').map(Number);
+      year = y;
+      mon = m - 1;
+    }
+    const start = new Date(Date.UTC(year, mon, 1));
+    const end = new Date(Date.UTC(year, mon + 1, 1));
+
+    const rows = await this.txns.listByUserForMonth(userId, start.toISOString(), end.toISOString());
+
+    let inflowKobo = 0;
+    let outflowKobo = 0;
+    const weeks = Array.from({ length: 5 }, () => ({ inKobo: 0, outKobo: 0 }));
+
+    const transactions = rows.map((r) => {
+      const direction = r.payer_user_id === userId ? 'sent' : 'received';
+      const amt = Number(r.amount_kobo);
+      const isIn = direction === 'received' && ['completed', 'payout_sent'].includes(r.state);
+      const isOut =
+        direction === 'sent' &&
+        ['payer_charged', 'payout_pending', 'payout_sent', 'completed'].includes(r.state);
+      if (isIn) inflowKobo += amt;
+      if (isOut) outflowKobo += amt;
+
+      const day = new Date(r.created_at).getUTCDate();
+      const w = Math.min(4, Math.floor((day - 1) / 7));
+      if (isIn) weeks[w].inKobo += amt;
+      if (isOut) weeks[w].outKobo += amt;
+
+      return {
+        id: r.id,
+        direction,
+        counterparty: (direction === 'sent' ? r.payee_name : r.payer_name) ?? 'PayXchange user',
+        description: r.description ?? '',
+        amountKobo: amt,
+        currency: r.currency,
+        state: r.state,
+        createdAt: r.created_at,
+      };
+    });
+
+    return {
+      month: `${year}-${String(mon + 1).padStart(2, '0')}`,
+      inflowKobo,
+      outflowKobo,
+      count: rows.length,
+      series: weeks.map((w, i) => ({ label: `W${i + 1}`, inKobo: w.inKobo, outKobo: w.outKobo })),
+      transactions,
+    };
   }
 
   private toPublic(t: TransactionRow) {

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateFundingSourceDto } from './dto/create-funding-source.dto';
 import { FundingSourcesService } from './funding-sources.service';
 
@@ -6,15 +7,15 @@ import { FundingSourcesService } from './funding-sources.service';
 export class FundingSourcesController {
   constructor(private readonly service: FundingSourcesService) {}
 
-  // POST /funding-sources — add a (mock) card for a user.
+  // POST /funding-sources — add a (mock) card for the current user.
   @Post()
-  create(@Body() dto: CreateFundingSourceDto) {
-    return this.service.create(dto);
+  create(@CurrentUser() userId: string, @Body() dto: CreateFundingSourceDto) {
+    return this.service.create(userId, dto);
   }
 
-  // GET /funding-sources/user/:userId — list a user's cards.
-  @Get('user/:userId')
-  list(@Param('userId', ParseUUIDPipe) userId: string) {
+  // GET /funding-sources/me — list the current user's cards.
+  @Get('me')
+  listMine(@CurrentUser() userId: string) {
     return this.service.listByUser(userId);
   }
 }

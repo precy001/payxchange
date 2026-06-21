@@ -6,11 +6,8 @@ export class InitiateTransactionDto {
   @Length(10, 200)
   token!: string;
 
-  // Who is paying (later this comes from the authenticated user).
-  @IsUUID()
-  payerUserId!: string;
-
-  // Which of the payer's saved cards to charge.
+  // Which of the payer's saved cards to charge. The payer's identity itself
+  // comes from the auth token, never the request body.
   @IsUUID()
   fundingSourceId!: string;
 }

@@ -10,6 +10,9 @@ export interface AppConfig {
   // 'mock' = deterministic fake provider (build & test with no Nomba calls).
   // 'nomba' = the real adapter using your test/live keys.
   paymentsDriver: 'mock' | 'nomba';
+  jwt: {
+    secret: string;
+  };
   nomba: {
     baseUrl: string;
     clientId: string;
@@ -40,6 +43,10 @@ export function loadConfig(): AppConfig {
     databaseUrl: required('DATABASE_URL'),
     redisUrl: required('REDIS_URL'),
     paymentsDriver,
+    jwt: {
+      // Signs every access/setup token. Must be long and random in production.
+      secret: required('JWT_SECRET'),
+    },
     nomba: {
       baseUrl: process.env.NOMBA_BASE_URL ?? 'https://api.nomba.com/v1',
       clientId: need('NOMBA_CLIENT_ID'),
