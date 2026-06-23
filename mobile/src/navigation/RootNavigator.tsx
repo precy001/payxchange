@@ -17,6 +17,8 @@ import PayPinScreen from '../screens/PayPinScreen';
 import PaySuccessScreen from '../screens/PaySuccessScreen';
 import ChangePinScreen from '../screens/ChangePinScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
+import TransactionDetailScreen from '../screens/TransactionDetailScreen';
+import { Txn } from '../components/TransactionRow';
 import { useTheme } from '../theme/ThemeContext';
 
 export type RootStackParamList = {
@@ -37,6 +39,7 @@ export type RootStackParamList = {
   PaySuccess: { amountKobo: number; payeeName: string };
   ChangePin: undefined;
   DeleteAccount: undefined;
+  TransactionDetail: { txn: Txn };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -70,6 +73,7 @@ export default function RootNavigator() {
           <Stack.Screen name="PaySuccess" component={PaySuccessScreen} />
           <Stack.Screen name="ChangePin" component={ChangePinScreen} />
           <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+          <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />
         </>
       ) : (
         <>

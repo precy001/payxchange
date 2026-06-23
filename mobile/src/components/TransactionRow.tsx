@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatNaira } from '../lib/money';
 import { formatWhen } from '../lib/format';
@@ -35,14 +35,14 @@ function statusMeta(state: string, colors: Palette): { label: string; color: str
   return { label: 'Pending', color: colors.muted };
 }
 
-export default function TransactionRow({ txn }: { txn: Txn }) {
+export default function TransactionRow({ txn, onPress }: { txn: Txn; onPress?: () => void }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const received = txn.direction === 'received';
   const status = statusMeta(txn.state, colors);
 
-  return (
-    <View style={styles.row}>
+  const inner = (
+    <>
       <View style={[styles.icon, { backgroundColor: received ? colors.successSoft : colors.primarySoft }]}>
         <Ionicons
           name={received ? 'arrow-down' : 'arrow-up'}
@@ -68,7 +68,14 @@ export default function TransactionRow({ txn }: { txn: Txn }) {
         </Text>
         <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>
       </View>
-    </View>
+    </>
+  );
+
+  if (!onPress) return <View style={styles.row}>{inner}</View>;
+  return (
+    <Pressable style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]} onPress={onPress}>
+      {inner}
+    </Pressable>
   );
 }
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl, ActivityIndicator, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../lib/api';
 import { formatNaira } from '../lib/money';
@@ -27,6 +27,7 @@ export default function ActivityScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const isFocused = useIsFocused();
+  const navigation = useNavigation<any>();
 
   const [monthDate, setMonthDate] = useState(() => {
     const n = new Date();
@@ -36,6 +37,7 @@ export default function ActivityScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
 
   const monthStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
   const isCurrentMonth = useMemo(() => {
@@ -74,7 +76,14 @@ export default function ActivityScreen() {
   };
 
   const txns = data?.transactions ?? [];
-  const filtered = txns.filter((t) => (filter === 'all' ? true : filter === 'in' ? t.direction === 'received' : t.direction === 'sent'));
+  const q = query.trim().toLowerCase();
+  const filtered = txns.filter((t) => {
+    const dirOk = filter === 'all' ? true : filter === 'in' ? t.direction === 'received' : t.direction === 'sent';
+    if (!dirOk) return false;
+    if (!q) return true;
+    const hay = `${t.counterparty} ${t.description} ${formatNaira(t.amountKobo)} ${t.amountKobo / 100}`.toLowerCase();
+    return hay.includes(q);
+  });
   const series = data?.series ?? [];
   const maxVal = Math.max(1, ...series.flatMap((s) => [s.inKobo, s.outKobo]));
 
@@ -151,6 +160,25 @@ export default function ActivityScreen() {
             </View>
           </View>
 
+          {/* Search */}
+          <View style={styles.searchWrap}>
+            <Ionicons name="search" size={18} color={colors.muted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name, note or amount"
+              placeholderTextColor={colors.muted}
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {query.length > 0 && (
+              <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.muted} />
+              </Pressable>
+            )}
+          </View>
+
           {/* Filter tabs */}
           <View style={styles.tabs}>
             {(['all', 'in', 'out'] as Filter[]).map((f) => (
@@ -165,15 +193,15 @@ export default function ActivityScreen() {
           {/* List */}
           {filtered.length === 0 ? (
             <View style={styles.empty}>
-              <Ionicons name="receipt-outline" size={28} color={colors.muted} />
-              <Text style={styles.emptyText}>Nothing here this month</Text>
+              <Ionicons name={q ? 'search-outline' : 'receipt-outline'} size={28} color={colors.muted} />
+              <Text style={styles.emptyText}>{q ? 'No matching transactions' : 'Nothing here this month'}</Text>
             </View>
           ) : (
             <View style={styles.list}>
               {filtered.map((t, i) => (
                 <View key={t.id}>
                   {i > 0 && <View style={styles.sep} />}
-                  <TransactionRow txn={t} />
+                  <TransactionRow txn={t} onPress={() => navigation.navigate('TransactionDetail', { txn: t })} />
                 </View>
               ))}
             </View>
@@ -211,13 +239,16 @@ const makeStyles = (colors: Palette) =>
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontFamily: font.medium, fontSize: 12, color: colors.muted },
 
-  tabs: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.pill, marginHorizontal: spacing.xl, marginTop: spacing.xl, padding: 4, borderWidth: 1, borderColor: colors.line },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.card, marginHorizontal: spacing.xl, marginTop: spacing.xl, paddingHorizontal: spacing.lg, height: 48, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: colors.ink, paddingVertical: 0 },
+
+  tabs: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.pill, marginHorizontal: spacing.xl, marginTop: spacing.md, padding: 4, borderWidth: 1, borderColor: colors.line },
   tab: { flex: 1, height: 38, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   tabActive: { backgroundColor: colors.primary },
   tabText: { fontFamily: font.semibold, fontSize: 14, color: colors.inkSoft },
   tabTextActive: { color: colors.white },
 
-  list: { backgroundColor: colors.card, borderRadius: radius.lg, marginHorizontal: spacing.xl, marginTop: spacing.md, paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: colors.line },
+  list: { backgroundColor: colors.card, marginHorizontal: spacing.xl, marginTop: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
   sep: { height: 1, backgroundColor: colors.line },
   empty: { alignItems: 'center', paddingTop: spacing.xxxl },
   emptyText: { fontFamily: font.semibold, fontSize: 15, color: colors.inkSoft, marginTop: spacing.sm },

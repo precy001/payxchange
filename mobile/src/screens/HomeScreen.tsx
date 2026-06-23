@@ -134,7 +134,7 @@ export default function HomeScreen() {
           {recent.map((t, i) => (
             <View key={t.id}>
               {i > 0 && <View style={styles.sep} />}
-              <TransactionRow txn={t} />
+              <TransactionRow txn={t} onPress={() => navigation.navigate('TransactionDetail', { txn: t })} />
             </View>
           ))}
         </View>
