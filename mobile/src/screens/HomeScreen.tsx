@@ -1,10 +1,11 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { api } from '../lib/api';
+import { useCachedResource } from '../lib/useCachedResource';
 import TransactionRow, { Txn } from '../components/TransactionRow';
 import Skeleton from '../components/Skeleton';
 import { font, gradients, radius, shadow, spacing } from '../theme';
@@ -15,19 +16,9 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
-  const isFocused = useIsFocused();
-  const [me, setMe] = useState<any>(null);
-  const [recent, setRecent] = useState<Txn[]>([]);
-
-  useEffect(() => {
-    api.me().then(setMe).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (isFocused) {
-      api.listTransactions().then((t) => setRecent(t.slice(0, 3))).catch(() => {});
-    }
-  }, [isFocused]);
+  const { data: me } = useCachedResource<any>('me', api.me, { maxAgeMs: 300_000 });
+  const { data: txList } = useCachedResource<Txn[]>('transactions', api.listTransactions, { maxAgeMs: 30_000 });
+  const recent = (txList ?? []).slice(0, 3);
 
   const fullName: string = me?.fullName || 'there';
   const firstName = fullName.split(' ')[0];

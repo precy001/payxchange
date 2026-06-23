@@ -13,6 +13,7 @@ import { FundingSourcesModule } from './funding-sources/funding-sources.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AuthModule } from './auth/auth.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -34,6 +35,7 @@ import { HealthController } from './health/health.controller';
     TransactionsModule,
     AuthModule,
     WebhooksModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [

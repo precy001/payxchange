@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../auth/AuthContext';
+import { registerForPush } from '../lib/push';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import LockScreen from '../screens/LockScreen';
@@ -47,6 +48,10 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator() {
   const { isReady, isAuthed, locked } = useAuth();
   const { colors } = useTheme();
+
+  useEffect(() => {
+    if (isAuthed) registerForPush();
+  }, [isAuthed]);
 
   if (!isReady) {
     return (

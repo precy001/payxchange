@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '../auth/AuthContext';
 import { formatNaira } from '../lib/money';
 import { Txn } from '../components/TransactionRow';
@@ -69,7 +70,7 @@ function receiptHtml(txn: Txn, statusLabel: string): string {
     * { font-family: -apple-system, Helvetica, Arial, sans-serif; box-sizing: border-box; }
     body { margin: 0; padding: 32px; color: #0B1020; }
     .card { max-width: 520px; margin: 0 auto; border: 1px solid #ECEEF4; border-radius: 18px; overflow: hidden; }
-    .head { background: linear-gradient(135deg,#4F46E5,#7C3AED); color: #fff; padding: 28px 28px 24px; }
+    .head { background: #4F46E5; color: #fff; padding: 28px 28px 24px; }
     .brand { font-weight: 800; font-size: 20px; letter-spacing: .3px; }
     .tag { opacity: .85; font-size: 13px; margin-top: 4px; }
     .amount { font-size: 38px; font-weight: 800; margin: 22px 28px 6px; color: ${received ? '#12B76A' : '#0B1020'}; }
@@ -120,14 +121,23 @@ export default function TransactionDetailScreen() {
     setSharing(true);
     setLockSuspended(true); // the share sheet backgrounds the app — don't lock
     try {
-      const { uri } = await Print.printToFileAsync({ html: receiptHtml(txn, status.label) });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share receipt', UTI: 'com.adobe.pdf' });
-      } else {
+      // In Expo Go the Print cache file is sandboxed and unreadable by other
+      // modules — so get the PDF as base64 in memory and write our own copy
+      // into the document dir, which is shareable.
+      const { base64 } = await Print.printToFileAsync({ html: receiptHtml(txn, status.label), base64: true });
+      if (!base64) throw new Error('Could not render the receipt.');
+      const dest = `${FileSystem.documentDirectory}PayXchange-receipt-${Date.now()}.pdf`;
+      await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
         Alert.alert('Sharing unavailable', 'This device cannot share files.');
+        return;
       }
-    } catch {
-      Alert.alert('Could not share', 'Please try again.');
+      await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Share receipt' });
+    } catch (e: any) {
+      // Surface the real reason so it's not a dead end.
+      Alert.alert('Could not share', String(e?.message ?? e ?? 'Unknown error'));
     } finally {
       setSharing(false);
       setTimeout(() => setLockSuspended(false), 500);

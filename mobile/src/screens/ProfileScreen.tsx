@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useAuth } from '../auth/AuthContext';
 import { api, ApiError } from '../lib/api';
+import { useCachedResource } from '../lib/useCachedResource';
+import { cache } from '../lib/cache';
 import { font, radius, spacing } from '../theme';
 import { useTheme, Palette } from '../theme/ThemeContext';
 
@@ -26,12 +28,8 @@ export default function ProfileScreen() {
   const { colors, isDark, toggle } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { logout, biometricAvailable, biometricEnabled, setBiometricEnabled, setLockSuspended } = useAuth();
-  const [me, setMe] = useState<any>(null);
+  const { data: me } = useCachedResource<any>('me', api.me, { maxAgeMs: 300_000 });
   const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    api.me().then(setMe).catch(() => {});
-  }, []);
 
   const fullName: string = me?.fullName || 'Your name';
   const initials = fullName
@@ -87,7 +85,7 @@ export default function ProfileScreen() {
       );
       const dataUrl = `data:image/jpeg;base64,${manip.base64}`;
       await api.updateAvatar(dataUrl);
-      setMe((m: any) => ({ ...(m || {}), avatar: dataUrl }));
+      cache.set('me', { ...(me || {}), avatar: dataUrl }); // updates Home too
     } catch (e) {
       Alert.alert('Upload failed', e instanceof ApiError ? e.message : 'Please try again.');
     } finally {

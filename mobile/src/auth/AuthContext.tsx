@@ -10,6 +10,7 @@ import {
   savePhone,
   getStoredPhone,
 } from '../lib/api';
+import { cache } from '../lib/cache';
 
 type Tokens = { accessToken: string; refreshToken: string };
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authedRef = useRef(false);
   const bioRef = useRef(false);
   const suspendRef = useRef(false);
+  const bgAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     authedRef.current = isAuthed;
@@ -70,13 +72,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     bioRef.current = biometricEnabled;
   }, [biometricEnabled]);
 
-  // Re-lock only when the app is genuinely backgrounded — NOT on 'inactive',
-  // which fires transiently for system dialogs, the app switcher, the biometric
-  // prompt, and the image picker. And never while a lock is suspended.
+  // Lock grace period: returning quickly (app switch, glancing at a notification,
+  // picking a photo) should NOT force a re-unlock — that's what made the app feel
+  // slow on every return. We only re-lock if the app was in the background longer
+  // than this window. (Like banking apps that auto-lock after a few idle minutes.)
+  const LOCK_GRACE_MS = 90_000;
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' && authedRef.current && bioRef.current && !suspendRef.current) {
-        setLocked(true);
+      if (state === 'background') {
+        // Remember when we left; don't lock yet.
+        bgAtRef.current = Date.now();
+      } else if (state === 'active') {
+        const awayMs = bgAtRef.current ? Date.now() - bgAtRef.current : 0;
+        bgAtRef.current = null;
+        if (awayMs > LOCK_GRACE_MS && authedRef.current && bioRef.current && !suspendRef.current) {
+          setLocked(true);
+        }
       }
     });
     return () => sub.remove();
@@ -94,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await api.me();
       if (me?.phone) await savePhone(me.phone);
+      if (me) cache.set('me', me); // warm the cache so screens render instantly
     } catch {
       // non-fatal
     }
@@ -107,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await clearTokens();
+    cache.clear(); // don't leak one account's data into the next
     setAuthed(false);
     setLocked(false);
   };

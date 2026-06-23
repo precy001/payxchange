@@ -10,6 +10,7 @@ import { FundingSourcesModule } from '../funding-sources/funding-sources.module'
 import { PaymentRequestsModule } from '../payment-requests/payment-requests.module';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AuthModule } from '../auth/auth.module';
     PaymentRequestsModule, // PaymentRequestsRepository
     UsersModule, // UsersRepository
     AuthModule, // AuthService (PIN verification)
+    NotificationsModule, // push alerts on completion
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService, TransactionsRepository, PayoutService, OutboxWorker, ExpirySweeper],

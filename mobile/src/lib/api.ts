@@ -96,6 +96,9 @@ export const api = {
   monthlySummary: (month: string) =>
     request(`/transactions/summary?month=${month}`, { auth: true }),
 
+  registerPushToken: (token: string, platform: string) =>
+    request('/notifications/token', { method: 'POST', auth: true, body: { token, platform } }),
+
   updateAvatar: (avatar: string) =>
     request('/account/avatar', { method: 'POST', auth: true, body: { avatar } }),
 

@@ -6,6 +6,7 @@ import {
   TransferResult,
 } from '../payments/payment-provider.interface';
 import { UsersRepository } from '../users/users.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionRow, TransactionsRepository } from './transactions.repository';
 
 // The payout leg of the saga, built to survive the real world:
@@ -31,8 +32,35 @@ export class PayoutService {
     private readonly db: DatabaseService,
     private readonly txns: TransactionsRepository,
     private readonly users: UsersRepository,
+    private readonly notifications: NotificationsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
+
+  // Fire "you received" to the payee and "payment successful" to the payer.
+  // Best-effort; never blocks or fails the payout.
+  private async notifyCompletion(txn: TransactionRow) {
+    try {
+      const [payer, payee] = await Promise.all([
+        this.users.findById(txn.payer_user_id),
+        this.users.findById(txn.payee_user_id),
+      ]);
+      const amount = `₦${(Number(txn.amount_kobo) / 100).toLocaleString('en-US')}`;
+      await this.notifications.notifyUser(
+        txn.payee_user_id,
+        'Money received',
+        `You received ${amount} from ${payer?.full_name ?? 'a PayXchange user'}`,
+        { transactionId: txn.id },
+      );
+      await this.notifications.notifyUser(
+        txn.payer_user_id,
+        'Payment successful',
+        `You sent ${amount} to ${payee?.full_name ?? 'a PayXchange user'}`,
+        { transactionId: txn.id },
+      );
+    } catch {
+      // notifications are non-critical
+    }
+  }
 
   async runOne(transactionId: string): Promise<boolean> {
     const txn = await this.txns.findById(transactionId);
@@ -114,17 +142,23 @@ export class PayoutService {
     result: TransferResult,
   ): Promise<boolean> {
     if (result.status === 'success') {
+      let completed = false;
       await this.db.withTransaction(async (c) => {
         const sent = await this.txns.transition(c, txn.id, 'payout_pending', 'payout_sent', txn.version);
         if (!sent) return;
-        await this.txns.transition(c, txn.id, 'payout_sent', 'completed', sent.version);
+        const done = await this.txns.transition(c, txn.id, 'payout_sent', 'completed', sent.version);
+        if (!done) return;
         await this.txns.writeLedger(c, txn.id, [
           { account: 'platform:settlement', direction: 'debit', amountKobo: txn.amount_kobo },
           { account: `payee:${txn.payee_user_id}`, direction: 'credit', amountKobo: txn.amount_kobo },
         ]);
         await this.txns.markPayoutAttempt(c, attemptId, 'success', result.sessionId ?? null);
+        completed = true;
       });
-      this.logger.log(`Transaction ${txn.id} completed — payout sent`);
+      if (completed) {
+        this.logger.log(`Transaction ${txn.id} completed — payout sent`);
+        await this.notifyCompletion(txn);
+      }
       return true;
     }
 
@@ -188,6 +222,7 @@ export class PayoutService {
     if (!txn) return;
     if (txn.state === 'completed') return; // already done — no-op
 
+    let completed = false;
     await this.db.withTransaction(async (c) => {
       let cur: TransactionRow | null = txn;
       if (cur.state === 'payout_pending') {
@@ -200,6 +235,7 @@ export class PayoutService {
           { account: 'platform:settlement', direction: 'debit', amountKobo: cur.amount_kobo },
           { account: `payee:${cur.payee_user_id}`, direction: 'credit', amountKobo: cur.amount_kobo },
         ]);
+        completed = true;
       }
     });
 
@@ -210,6 +246,7 @@ export class PayoutService {
       );
     }
     this.logger.log(`Transaction ${transactionId} completed via webhook`);
+    if (completed) await this.notifyCompletion(txn);
   }
 
   // Provider reported the payout failed. Drives the refund, idempotently.

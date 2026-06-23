@@ -13,11 +13,18 @@ import {
 } from '@expo-google-fonts/inter';
 import { AuthProvider } from './src/auth/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
+import { attachNotificationTapHandler } from './src/lib/push';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { colors } from './src/theme';
 
 function ThemedApp() {
   const { colors: c, isDark } = useTheme();
+
+  React.useEffect(() => {
+    attachNotificationTapHandler();
+  }, []);
+
   const base = isDark ? DarkTheme : DefaultTheme;
   const navTheme = {
     ...base,
@@ -34,7 +41,7 @@ function ThemedApp() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer theme={navTheme}>
+        <NavigationContainer ref={navigationRef} theme={navTheme}>
           <RootNavigator />
         </NavigationContainer>
         <StatusBar style={isDark ? 'light' : 'dark'} />

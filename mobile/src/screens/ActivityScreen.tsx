@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl, ActivityIndicator, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../lib/api';
+import { useCachedResource } from '../lib/useCachedResource';
 import { formatNaira } from '../lib/money';
 import TransactionRow, { Txn } from '../components/TransactionRow';
 import { font, radius, spacing } from '../theme';
@@ -26,16 +27,12 @@ export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const isFocused = useIsFocused();
   const navigation = useNavigation<any>();
 
   const [monthDate, setMonthDate] = useState(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), 1);
   });
-  const [data, setData] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
 
@@ -45,29 +42,13 @@ export default function ActivityScreen() {
     return monthDate.getFullYear() === n.getFullYear() && monthDate.getMonth() === n.getMonth();
   }, [monthDate]);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api.monthlySummary(monthStr);
-      setData(res);
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [monthStr]);
-
-  useEffect(() => {
-    if (isFocused) {
-      setLoading(true);
-      load();
-    }
-  }, [isFocused, load]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  };
+  // Cached per month: revisiting a month shows instantly, refreshes if stale.
+  const { data, loading, refreshing, refresh } = useCachedResource<Summary>(
+    `summary:${monthStr}`,
+    () => api.monthlySummary(monthStr),
+    { maxAgeMs: 30_000 },
+  );
+  const onRefresh = refresh;
 
   const prevMonth = () => setMonthDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => {
