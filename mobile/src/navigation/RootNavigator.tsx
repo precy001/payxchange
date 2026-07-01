@@ -15,9 +15,14 @@ import ReceiveQRScreen from '../screens/ReceiveQRScreen';
 import ScanScreen from '../screens/ScanScreen';
 import PayConfirmScreen from '../screens/PayConfirmScreen';
 import PayPinScreen from '../screens/PayPinScreen';
+import PayCheckoutScreen from '../screens/PayCheckoutScreen';
 import PaySuccessScreen from '../screens/PaySuccessScreen';
 import ChangePinScreen from '../screens/ChangePinScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
+import FreezeAccountScreen from '../screens/FreezeAccountScreen';
+import SessionsScreen from '../screens/SessionsScreen';
+import ReportProblemScreen from '../screens/ReportProblemScreen';
+import DisputesScreen from '../screens/DisputesScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import { Txn } from '../components/TransactionRow';
 import { useTheme } from '../theme/ThemeContext';
@@ -37,9 +42,14 @@ export type RootStackParamList = {
   Scan: undefined;
   PayConfirm: { token: string };
   PayPin: { transactionId: string; amountKobo: number; payeeName: string };
+  PayCheckout: { checkoutUrl: string; transactionId: string; amountKobo: number; payeeName: string };
   PaySuccess: { amountKobo: number; payeeName: string };
   ChangePin: undefined;
   DeleteAccount: undefined;
+  FreezeAccount: undefined;
+  Sessions: undefined;
+  ReportProblem: { txn: Txn };
+  Disputes: undefined;
   TransactionDetail: { txn: Txn };
 };
 
@@ -75,9 +85,14 @@ export default function RootNavigator() {
           <Stack.Screen name="Scan" component={ScanScreen} />
           <Stack.Screen name="PayConfirm" component={PayConfirmScreen} />
           <Stack.Screen name="PayPin" component={PayPinScreen} />
+          <Stack.Screen name="PayCheckout" component={PayCheckoutScreen} />
           <Stack.Screen name="PaySuccess" component={PaySuccessScreen} />
           <Stack.Screen name="ChangePin" component={ChangePinScreen} />
           <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+          <Stack.Screen name="FreezeAccount" component={FreezeAccountScreen} />
+          <Stack.Screen name="Sessions" component={SessionsScreen} />
+          <Stack.Screen name="ReportProblem" component={ReportProblemScreen} />
+          <Stack.Screen name="Disputes" component={DisputesScreen} />
           <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />
         </>
       ) : (

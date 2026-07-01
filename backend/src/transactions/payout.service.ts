@@ -97,11 +97,14 @@ export class PayoutService {
     });
 
     const payee = await this.users.findById(txn.payee_user_id);
+    // TODO(real-money): replace with the payee's saved payout destination once
+    // the "receive into your bank account" flow is built. For sandbox testing we
+    // send to Nomba's documented test account so the transfer actually succeeds.
     const result = await this.provider.transferToBank({
       amountKobo: Number(txn.amount_kobo),
-      accountNumber: '0000000000',
-      bankCode: '000',
-      accountName: payee?.full_name ?? 'PayXchange user',
+      accountNumber: process.env.PAYOUT_TEST_ACCOUNT ?? '0000000000',
+      bankCode: process.env.PAYOUT_TEST_BANK_CODE ?? '000',
+      accountName: process.env.PAYOUT_TEST_ACCOUNT_NAME ?? payee?.full_name ?? 'PayXchange user',
       reference: payoutRef,
       narration: 'PayXchange payout',
     });

@@ -26,6 +26,22 @@ export interface ChargeResult {
   raw: unknown;
 }
 
+// Hosted-checkout inbound: instead of charging a token server-side, we create
+// an order and hand the payer a URL to pay on. Confirmation arrives by webhook.
+export interface CreateCheckoutInput {
+  amountKobo: number;
+  currency: string; // 'NGN'
+  customerEmail: string;
+  orderReference: string; // our ref; echoed back on the webhook
+  callbackUrl: string; // where the provider posts payment_success
+}
+
+export interface CheckoutOrderResult {
+  checkoutUrl: string;
+  orderReference: string;
+  raw: unknown;
+}
+
 export interface BankLookupInput {
   accountNumber: string;
   bankCode: string;
@@ -59,7 +75,14 @@ export interface TransferResult {
 export interface PaymentProvider {
   readonly name: string;
 
+  // When true, the inbound leg uses createCheckoutOrder (+ webhook) instead of
+  // a silent server-side charge. Lets the core branch the confirm flow.
+  readonly usesHostedCheckout: boolean;
+
   chargeTokenizedCard(input: ChargeTokenizedCardInput): Promise<ChargeResult>;
+
+  // Create a hosted checkout order; returns a URL for the payer to pay on.
+  createCheckoutOrder(input: CreateCheckoutInput): Promise<CheckoutOrderResult>;
 
   lookupBankAccount(input: BankLookupInput): Promise<BankLookupResult>;
 

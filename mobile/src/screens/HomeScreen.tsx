@@ -80,7 +80,7 @@ export default function HomeScreen() {
           onPress={() => navigation.navigate('Scan')}
         >
           <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-            <Ionicons name="scan" size={26} color={colors.white} />
+            <Ionicons name="scan" size={30} color={colors.white} />
           </View>
           <View>
             <Text style={styles.actionPrimaryText}>Scan to Pay</Text>
@@ -93,7 +93,7 @@ export default function HomeScreen() {
           onPress={() => navigation.navigate('ReceiveAmount')}
         >
           <View style={[styles.actionIcon, { backgroundColor: colors.primarySoft }]}>
-            <Ionicons name="qr-code" size={24} color={colors.primary} />
+            <Ionicons name="qr-code" size={28} color={colors.primary} />
           </View>
           <View>
             <Text style={styles.actionSecondaryText}>Receive</Text>
@@ -154,14 +154,14 @@ const makeStyles = (colors: Palette) =>
   cardPhone: { fontFamily: font.regular, color: colors.onBrandSoft, fontSize: 14, marginTop: 3, letterSpacing: 0.5 },
 
   actions: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.xl, marginTop: spacing.xl },
-  action: { flex: 1, height: 140, borderRadius: radius.lg, padding: spacing.lg, justifyContent: 'space-between' },
+  action: { flex: 1, height: 168, borderRadius: radius.lg, padding: spacing.lg, justifyContent: 'space-between' },
   actionPrimary: { backgroundColor: colors.primary },
   actionSecondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
-  actionIcon: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  actionPrimaryText: { fontFamily: font.bold, fontSize: 17, color: colors.white },
-  actionPrimarySub: { fontFamily: font.regular, fontSize: 12, color: colors.onBrandSoft, marginTop: 2 },
-  actionSecondaryText: { fontFamily: font.bold, fontSize: 17, color: colors.ink },
-  actionSecondarySub: { fontFamily: font.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+  actionIcon: { width: 58, height: 58, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  actionPrimaryText: { fontFamily: font.bold, fontSize: 19, color: colors.white },
+  actionPrimarySub: { fontFamily: font.regular, fontSize: 13, color: colors.onBrandSoft, marginTop: 3 },
+  actionSecondaryText: { fontFamily: font.bold, fontSize: 19, color: colors.ink },
+  actionSecondarySub: { fontFamily: font.regular, fontSize: 13, color: colors.muted, marginTop: 3 },
   pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
 
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.xl, marginTop: spacing.xxl, marginBottom: spacing.md },

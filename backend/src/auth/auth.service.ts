@@ -12,7 +12,15 @@ import { UsersRepository } from '../users/users.repository';
 import { OtpService } from './otp.service';
 import { TokenService } from './token.service';
 import { AuthRepository } from './auth.repository';
+import { SessionsRepository } from './sessions.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LoginDto, RefreshDto, RegisterDto, SetPinDto, VerifyOtpDto } from './dto/auth.dto';
+
+export interface DeviceCtx {
+  deviceId?: string | null;
+  label?: string | null;
+  platform?: string | null;
+}
 
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
@@ -25,6 +33,8 @@ export class AuthService {
     private readonly otp: OtpService,
     private readonly tokens: TokenService,
     private readonly authRepo: AuthRepository,
+    private readonly sessions: SessionsRepository,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -70,15 +80,21 @@ export class AuthService {
     return { message: 'Phone verified', setupToken, nextStep: 'set-pin' };
   }
 
-  async setPin(dto: SetPinDto) {
+  async setPin(dto: SetPinDto, ctx?: DeviceCtx) {
     const userId = await this.tokens.verifySetupToken(dto.setupToken);
     const pinHash = await argonHash(dto.pin);
     await this.authRepo.upsertPin(userId, pinHash);
-    const tokens = await this.tokens.issueAuthTokens(userId);
+    const session = await this.sessions.upsert(
+      userId,
+      ctx?.deviceId ?? null,
+      ctx?.label ?? null,
+      ctx?.platform ?? null,
+    );
+    const tokens = await this.tokens.issueAuthTokens(userId, session.id);
     return { message: 'PIN set', userId, ...tokens };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ctx?: DeviceCtx) {
     const user = await this.usersRepo.findByPhone(dto.phone);
     // Generic failure that never reveals whether the phone is registered.
     const invalid = new UnauthorizedException('Invalid phone or PIN');
@@ -96,7 +112,27 @@ export class AuthService {
       throw invalid;
     }
 
-    const tokens = await this.tokens.issueAuthTokens(user.id);
+    const session = await this.sessions.upsert(
+      user.id,
+      ctx?.deviceId ?? null,
+      ctx?.label ?? null,
+      ctx?.platform ?? null,
+    );
+    const tokens = await this.tokens.issueAuthTokens(user.id, session.id);
+
+    // Alert only on a genuinely new device (not a PIN-unlock that reuses its
+    // session, and not the very first device on the account).
+    if (session.isNew && (await this.sessions.countActive(user.id)) > 1) {
+      this.notifications
+        .notifyUser(
+          user.id,
+          'New login',
+          `Your account was signed in on ${ctx?.label ?? 'a new device'}.`,
+          { type: 'login' },
+        )
+        .catch(() => {});
+    }
+
     return { userId: user.id, ...tokens };
   }
 

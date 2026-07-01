@@ -2,10 +2,12 @@ import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/commo
 import { createHash } from 'crypto';
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.interface';
 import { PayoutService } from '../transactions/payout.service';
+import { TransactionsService } from '../transactions/transactions.service';
 import { WebhooksRepository } from './webhooks.repository';
 
 // Inbound provider callbacks. The provider tells us the async result of a
-// payout; we verify it's authentic, dedupe it, and drive the saga.
+// payout or an inbound checkout payment; we verify it's authentic, dedupe it,
+// and drive the flow.
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
@@ -13,6 +15,7 @@ export class WebhooksService {
   constructor(
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
     private readonly payout: PayoutService,
+    private readonly transactions: TransactionsService,
     private readonly repo: WebhooksRepository,
   ) {}
 
@@ -35,7 +38,6 @@ export class WebhooksService {
   async process(payload: any, payloadHash: string) {
     const eventType: string = payload?.event ?? payload?.event_type ?? 'unknown';
     const data = payload?.data ?? {};
-    const transactionId: string | undefined = data.transactionId ?? this.parseTxnId(data.reference);
 
     // Dedupe: if we've already recorded this payload, do nothing.
     const id = await this.repo.recordIfNew(this.provider.name, eventType, payloadHash, payload);
@@ -44,6 +46,22 @@ export class WebhooksService {
       return { duplicate: true };
     }
 
+    // Inbound checkout success: Nomba echoes our orderReference back.
+    if (eventType === 'payment_success') {
+      const orderReference: string | undefined =
+        data?.order?.orderReference ?? data?.orderReference;
+      if (orderReference) {
+        await this.transactions.chargeFromCheckout(orderReference);
+        this.logger.log(`Checkout paid — order ${orderReference}`);
+      } else {
+        this.logger.warn('payment_success carried no orderReference');
+      }
+      await this.repo.markProcessed(id);
+      return { ok: true, eventType, orderReference };
+    }
+
+    // Payout result events (our own payout.* / simulator).
+    const transactionId: string | undefined = data.transactionId ?? this.parseTxnId(data.reference);
     if (transactionId) {
       if (eventType === 'payout.success') {
         await this.payout.confirmPayoutSuccess(transactionId, data.sessionId ?? null);

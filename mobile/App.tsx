@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
 import { attachNotificationTapHandler } from './src/lib/push';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import SplashIntro from './src/components/SplashIntro';
 import { colors } from './src/theme';
 
 function ThemedApp() {
@@ -58,6 +59,7 @@ export default function App() {
     Inter_700Bold,
     Inter_800ExtraBold,
   });
+  const [introDone, setIntroDone] = useState(false);
 
   if (!fontsLoaded) {
     return (
@@ -69,7 +71,10 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <ThemedApp />
+      <View style={{ flex: 1 }}>
+        <ThemedApp />
+        {!introDone && <SplashIntro onFinish={() => setIntroDone(true)} />}
+      </View>
     </ThemeProvider>
   );
 }

@@ -38,8 +38,19 @@ export default function PayPinScreen() {
     (async () => {
       setLoading(true);
       try {
-        await api.confirmTransaction(transactionId, pin);
-        navigation.replace('PaySuccess', { amountKobo, payeeName });
+        const res = await api.confirmTransaction(transactionId, pin);
+        // Hosted-checkout providers (Nomba) return a URL to pay on; the charge
+        // is confirmed by webhook. Otherwise the charge already happened.
+        if (res?.checkoutUrl) {
+          navigation.replace('PayCheckout', {
+            checkoutUrl: res.checkoutUrl,
+            transactionId,
+            amountKobo,
+            payeeName,
+          });
+        } else {
+          navigation.replace('PaySuccess', { amountKobo, payeeName });
+        }
       } catch (e) {
         const err = e as ApiError;
         if (err.status === 423) {

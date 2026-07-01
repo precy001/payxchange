@@ -36,7 +36,7 @@ export class JwtAuthGuard implements CanActivate {
       const payload = await this.jwt.verifyAsync(header.slice(7));
       // Reject anything that isn't an access token (e.g. a setup token).
       if (payload?.typ !== 'access' || !payload?.sub) throw new Error('bad token');
-      req.user = { userId: payload.sub };
+      req.user = { userId: payload.sub, sessionId: payload.sid };
       return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');

@@ -1,5 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { Body, Controller, Headers, Post } from '@nestjs/common';
+import { AuthService, DeviceCtx } from './auth.service';
 import { Public } from './public.decorator';
 import {
   LoginDto,
@@ -8,6 +8,14 @@ import {
   SetPinDto,
   VerifyOtpDto,
 } from './dto/auth.dto';
+
+function deviceCtx(id?: string, name?: string, platform?: string): DeviceCtx {
+  return {
+    deviceId: id || null,
+    label: name || null,
+    platform: platform || null,
+  };
+}
 
 @Public()
 @Controller('auth')
@@ -28,14 +36,24 @@ export class AuthController {
 
   // POST /auth/set-pin — set the PIN using the setup token; returns tokens.
   @Post('set-pin')
-  setPin(@Body() dto: SetPinDto) {
-    return this.auth.setPin(dto);
+  setPin(
+    @Body() dto: SetPinDto,
+    @Headers('x-device-id') deviceId?: string,
+    @Headers('x-device-name') deviceName?: string,
+    @Headers('x-device-platform') platform?: string,
+  ) {
+    return this.auth.setPin(dto, deviceCtx(deviceId, deviceName, platform));
   }
 
   // POST /auth/login — phone + PIN -> access + refresh tokens.
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.auth.login(dto);
+  login(
+    @Body() dto: LoginDto,
+    @Headers('x-device-id') deviceId?: string,
+    @Headers('x-device-name') deviceName?: string,
+    @Headers('x-device-platform') platform?: string,
+  ) {
+    return this.auth.login(dto, deviceCtx(deviceId, deviceName, platform));
   }
 
   // POST /auth/refresh — exchange a refresh token for a new pair.

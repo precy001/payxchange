@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { formatNaira } from '../lib/money';
 import Button from '../components/Button';
-import { font, radius, shadow, spacing } from '../theme';
+import { font, gradients, radius, shadow, spacing } from '../theme';
 import { useTheme, Palette } from '../theme/ThemeContext';
 
 export default function ReceiveQRScreen() {
@@ -27,8 +28,25 @@ export default function ReceiveQRScreen() {
         <Text style={styles.desc}>{description}</Text>
 
         <View style={styles.qrCard}>
+          <View style={styles.brandRow}>
+            <Text style={styles.brandMark}>
+              Pay<Text style={styles.brandX}>Xchange</Text>
+            </Text>
+          </View>
           {qrImage ? (
-            <Image source={{ uri: qrImage }} style={styles.qr} resizeMode="contain" />
+            <View style={styles.qrWrap}>
+              <Image source={{ uri: qrImage }} style={styles.qr} resizeMode="contain" />
+              <View style={styles.logoBadge}>
+                <LinearGradient
+                  colors={gradients.brand}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.logoInner}
+                >
+                  <Text style={styles.logoText}>PX</Text>
+                </LinearGradient>
+              </View>
+            </View>
           ) : (
             <Text style={styles.muted}>No code</Text>
           )}
@@ -57,9 +75,23 @@ const makeStyles = (colors: Palette) =>
     backgroundColor: colors.white,
     borderRadius: radius.xl,
     padding: spacing.xl,
+    alignItems: 'center',
     ...shadow.card,
   },
-  qr: { width: 240, height: 240 },
+  brandRow: { marginBottom: spacing.lg },
+  // The card is always true white (for scannability), so these use fixed dark
+  // brand colors rather than theme colors.
+  brandMark: { fontFamily: font.extrabold, fontSize: 18, color: '#0B1020', letterSpacing: -0.3 },
+  brandX: { color: '#4F46E5' },
+  qrWrap: { width: 240, height: 240, alignItems: 'center', justifyContent: 'center' },
+  qr: { position: 'absolute', width: 240, height: 240 },
+  logoBadge: {
+    padding: 5,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  logoInner: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  logoText: { fontFamily: font.extrabold, fontSize: 17, color: '#FFFFFF', letterSpacing: -0.5 },
   muted: { fontFamily: font.regular, color: colors.muted, width: 240, height: 240, textAlign: 'center' },
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xl },
   hint: { fontFamily: font.medium, fontSize: 13, color: colors.muted },

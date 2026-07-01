@@ -12,6 +12,7 @@ export interface PublicUser {
   fullName: string | null;
   kyc: string;
   avatar: string | null;
+  frozen: boolean;
   createdAt: string;
 }
 
@@ -53,6 +54,7 @@ export class UsersService {
       fullName: u.full_name,
       kyc: u.kyc,
       avatar: u.avatar,
+      frozen: u.frozen_at !== null,
       createdAt: u.created_at,
     };
   }

@@ -156,6 +156,18 @@ export default function ProfileScreen() {
             />
           }
         />
+        <View style={styles.divider} />
+        <Row
+          icon="phone-portrait-outline"
+          label="Devices & sessions"
+          onPress={() => navigation.navigate('Sessions')}
+        />
+        <View style={styles.divider} />
+        <Row
+          icon={me?.frozen ? 'snow' : 'snow-outline'}
+          label={me?.frozen ? 'Account frozen — tap to unfreeze' : 'Freeze account'}
+          onPress={() => navigation.navigate('FreezeAccount')}
+        />
       </View>
 
       <Text style={styles.section}>Appearance</Text>
@@ -176,6 +188,8 @@ export default function ProfileScreen() {
 
       <Text style={styles.section}>General</Text>
       <View style={styles.card}>
+        <Row icon="flag-outline" label="My reports" onPress={() => navigation.navigate('Disputes')} />
+        <View style={styles.divider} />
         <Row icon="help-circle-outline" label="Help & support" onPress={() => Alert.alert('Help & support', 'support@payxchange.app')} />
         <View style={styles.divider} />
         <Row icon="information-circle-outline" label="About PayXchange" onPress={() => Alert.alert('PayXchange', 'Scan-to-pay, made simple. v1.0')} />

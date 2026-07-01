@@ -10,10 +10,11 @@ export interface UserRow {
   phone_verified: boolean;
   avatar: string | null;
   deactivated_at: string | null;
+  frozen_at: string | null;
   created_at: string;
 }
 
-const COLS = `id, phone, email, full_name, kyc, phone_verified, avatar, deactivated_at, created_at`;
+const COLS = `id, phone, email, full_name, kyc, phone_verified, avatar, deactivated_at, frozen_at, created_at`;
 
 @Injectable()
 export class UsersRepository {
@@ -70,5 +71,13 @@ export class UsersRepository {
   // Soft delete: keep the row (and its financial history) but mark it closed.
   async deactivate(id: string): Promise<void> {
     await this.db.query(`UPDATE users SET deactivated_at = now() WHERE id = $1`, [id]);
+  }
+
+  // Reversible freeze. Pass true to freeze, false to unfreeze.
+  async setFrozen(id: string, frozen: boolean): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET frozen_at = ${frozen ? 'now()' : 'NULL'} WHERE id = $1`,
+      [id],
+    );
   }
 }

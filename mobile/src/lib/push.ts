@@ -1,27 +1,39 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { api } from './api';
 import { navigationRef } from '../navigation/navigationRef';
 
-// Show notifications while the app is in the foreground too.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Expo Go (SDK 53+) REMOVED remote push on Android and throws the instant the
+// push-token APIs are touched — which crashes the app on load. So in Expo Go we
+// don't even load expo-notifications. Push stays dormant until you run a real
+// development or production build, where everything below works normally.
+const isExpoGo =
+  Constants.executionEnvironment === 'storeClient' || (Constants as any).appOwnership === 'expo';
 
-let tapSub: Notifications.Subscription | null = null;
+let Notifications: any = null;
+if (!isExpoGo) {
+  // Loaded lazily so Expo Go never initialises the remote-push module.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Notifications = require('expo-notifications');
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
+
+let tapSub: any = null;
 
 // Ask permission, get the Expo push token, and register it with the backend.
-// No-ops quietly where remote push isn't available (e.g. Expo Go on Android).
+// No-ops in Expo Go and on simulators.
 export async function registerForPush(): Promise<void> {
+  if (isExpoGo || !Notifications) return;
   try {
-    if (!Device.isDevice) return; // no push on simulators
+    if (!Device.isDevice) return;
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -45,17 +57,15 @@ export async function registerForPush(): Promise<void> {
       await api.registerPushToken(tokenResp.data, Platform.OS);
     }
   } catch (e) {
-    // Remote push is unavailable in Expo Go on Android (SDK 53+); ignore.
     console.log('Push registration skipped:', String(e));
   }
 }
 
-// When a notification is tapped, jump to the Activity tab (where the
-// transaction lives). Safe to call once at startup.
+// When a notification is tapped, jump to the Activity tab. No-ops in Expo Go.
 export function attachNotificationTapHandler(): void {
-  if (tapSub) return;
-  tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data as any;
+  if (isExpoGo || !Notifications || tapSub) return;
+  tapSub = Notifications.addNotificationResponseReceivedListener((response: any) => {
+    const data = response?.notification?.request?.content?.data;
     if (data?.transactionId && navigationRef.isReady()) {
       navigationRef.navigate('Tabs', { screen: 'Activity' });
     }

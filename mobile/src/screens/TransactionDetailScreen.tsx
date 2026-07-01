@@ -1,14 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '../auth/AuthContext';
+import { api } from '../lib/api';
 import { formatNaira } from '../lib/money';
 import { Txn } from '../components/TransactionRow';
+import { disputeStatusMeta, REASON_LABEL, Dispute } from './DisputesScreen';
 import { font, radius, spacing } from '../theme';
 import { useTheme, Palette } from '../theme/ThemeContext';
 
@@ -103,8 +105,16 @@ export default function TransactionDetailScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { setLockSuspended } = useAuth();
   const [sharing, setSharing] = useState(false);
+  const [dispute, setDispute] = useState<Dispute | null>(null);
+  const isFocused = useIsFocused();
 
   const txn: Txn = route.params?.txn;
+
+  useEffect(() => {
+    if (!isFocused || !txn?.id) return;
+    api.getTransactionDispute(txn.id).then(setDispute).catch(() => {});
+  }, [isFocused, txn?.id]);
+
   if (!txn) {
     return (
       <View style={[styles.fill, { paddingTop: insets.top + spacing.xl, alignItems: 'center' }]}>
@@ -195,6 +205,36 @@ export default function TransactionDetailScreen() {
           })}
         </View>
 
+        {/* Dispute / report */}
+        {dispute ? (
+          <>
+            <Text style={styles.sectionTitle}>Reported problem</Text>
+            <View style={styles.card}>
+              <View style={styles.disputeTop}>
+                <Text style={styles.disputeReason}>{REASON_LABEL[dispute.reason] ?? 'Issue'}</Text>
+                {(() => {
+                  const m = disputeStatusMeta(dispute.status, colors);
+                  return (
+                    <View style={[styles.statusPill, { backgroundColor: m.color + '22' }]}>
+                      <Text style={[styles.statusText, { color: m.color }]}>{m.label}</Text>
+                    </View>
+                  );
+                })()}
+              </View>
+              {dispute.details ? <Text style={styles.disputeDetails}>{dispute.details}</Text> : null}
+              {dispute.resolution ? <Text style={styles.disputeResolution}>Resolution: {dispute.resolution}</Text> : null}
+            </View>
+          </>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.reportBtn, pressed && { opacity: 0.9 }]}
+            onPress={() => navigation.navigate('ReportProblem', { txn })}
+          >
+            <Ionicons name="flag-outline" size={18} color={colors.danger} />
+            <Text style={styles.reportText}>Report a problem</Text>
+          </Pressable>
+        )}
+
         <Pressable
           style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.9 }]}
           onPress={shareReceipt}
@@ -247,4 +287,11 @@ const makeStyles = (colors: Palette) =>
 
     shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, height: 56, borderRadius: radius.lg, backgroundColor: colors.primary, marginTop: spacing.sm },
     shareText: { fontFamily: font.bold, fontSize: 16, color: colors.white },
+
+    reportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, height: 52, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.danger, marginBottom: spacing.md },
+    reportText: { fontFamily: font.bold, fontSize: 15, color: colors.danger },
+    disputeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.md },
+    disputeReason: { fontFamily: font.semibold, fontSize: 15, color: colors.ink, flex: 1 },
+    disputeDetails: { fontFamily: font.regular, fontSize: 14, color: colors.inkSoft, lineHeight: 20, paddingBottom: spacing.md },
+    disputeResolution: { fontFamily: font.medium, fontSize: 13, color: colors.success, paddingBottom: spacing.md },
   });

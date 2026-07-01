@@ -8,3 +8,11 @@ export const CurrentUser = createParamDecorator(
     return req.user?.userId;
   },
 );
+
+// The session id baked into the current access token (if present).
+export const CurrentSession = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string | undefined => {
+    const req = ctx.switchToHttp().getRequest();
+    return req.user?.sessionId;
+  },
+);

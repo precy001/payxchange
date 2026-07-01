@@ -41,6 +41,12 @@ export class TransactionsService {
 
   // ---- INITIATE: payer scans -> PENDING transaction -------------------------
   async initiate(input: { token: string; payerUserId: string; fundingSourceId: string }) {
+    // A frozen account cannot move money.
+    const payer = await this.users.findById(input.payerUserId);
+    if (payer?.frozen_at) {
+      throw new ForbiddenException('Your account is frozen. Unfreeze it to make payments.');
+    }
+
     // Resolve the scanned token to a payment request (fast path via Redis).
     const requestId = await this.redis.get(`qr:${input.token}`);
     if (!requestId) {
@@ -141,10 +147,29 @@ export class TransactionsService {
       if (txn.state === 'payer_charged') return this.toPublic(txn); // a concurrent confirm won
     }
 
-    // Step 2 (NO db lock held): charge the card through the provider. The
-    // provider dedupes on collection_ref, so this is safe to retry.
-    const fs = await this.funding.findById(txn.funding_source_id);
+    // Step 2: the inbound payment.
     const payer = await this.users.findById(txn.payer_user_id);
+
+    if (this.provider.usesHostedCheckout) {
+      // Hosted checkout: create an order and hand the app a URL to pay on. The
+      // charge is confirmed later by the payment_success webhook, which calls
+      // chargeFromCheckout(). The txn stays AUTHORIZED until then.
+      const publicBase = (process.env.PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
+      const order = await this.provider.createCheckoutOrder({
+        amountKobo: Number(txn.amount_kobo),
+        currency: txn.currency,
+        customerEmail: payer?.email ?? 'payer@payxchange.app',
+        orderReference: txn.collection_ref,
+        callbackUrl: `${publicBase}/webhooks/nomba`,
+      });
+      // Map the order back to this txn so the webhook can find it (TTL 1h).
+      await this.redis.set(`nomba:order:${txn.collection_ref}`, id, 'EX', 3600);
+      this.logger.log(`Transaction ${id} awaiting checkout payment (${txn.collection_ref})`);
+      return { ...this.toPublic(txn), checkoutUrl: order.checkoutUrl };
+    }
+
+    // Synchronous charge (mock / token providers). Dedupes on collection_ref.
+    const fs = await this.funding.findById(txn.funding_source_id);
     const charge = await this.provider.chargeTokenizedCard({
       amountKobo: Number(txn.amount_kobo),
       currency: txn.currency,
@@ -153,32 +178,8 @@ export class TransactionsService {
       reference: txn.collection_ref,
     });
 
-    // Step 3 (short DB tx): record the outcome.
     if (charge.success) {
-      const versionAtAuth = txn.version;
-      const result = await this.db.withTransaction(async (c) => {
-        const moved = await this.txns.transition(c, id, 'authorized', 'payer_charged', versionAtAuth);
-        if (!moved) {
-          // A concurrent confirm already charged + wrote the ledger. Don't
-          // write it twice; just report the current row.
-          return null;
-        }
-        // Double-entry: payer is debited, our settlement account is credited.
-        await this.txns.writeLedger(c, id, [
-          { account: `payer:${moved.payer_user_id}`, direction: 'debit', amountKobo: moved.amount_kobo },
-          { account: 'platform:settlement', direction: 'credit', amountKobo: moved.amount_kobo },
-        ]);
-        // Transactional outbox: queue the payout leg. Committed atomically with
-        // the charge, so the payout job exists iff the charge succeeded.
-        await this.txns.insertOutbox(c, id, 'payout.requested', {
-          transactionId: id,
-          amountKobo: moved.amount_kobo,
-        });
-        return moved;
-      });
-      const finalRow = result ?? (await this.txns.findById(id))!;
-      this.logger.log(`Transaction ${id} charged (${charge.providerReference})`);
-      return this.toPublic(finalRow);
+      return this.applyCharge(id, charge.providerReference, txn.version);
     }
 
     // Charge failed: mark FAILED and tell the client.
@@ -189,6 +190,47 @@ export class TransactionsService {
       { message: 'Card charge was declined', transactionId: id, state: 'failed' },
       HttpStatus.PAYMENT_REQUIRED,
     );
+  }
+
+  // The "charge succeeded" effect: AUTHORIZED -> PAYER_CHARGED + ledger + queue
+  // the payout. Idempotent (the transition returns null if already applied), so
+  // the webhook may safely call it even if Nomba fires twice.
+  private async applyCharge(id: string, providerReference: string, versionAtAuth?: number) {
+    const current = await this.txns.findById(id);
+    if (!current) throw new NotFoundException('Transaction not found');
+    if (['payer_charged', 'payout_pending', 'payout_sent', 'completed'].includes(current.state)) {
+      return this.toPublic(current); // already charged
+    }
+    const version = versionAtAuth ?? current.version;
+    const result = await this.db.withTransaction(async (c) => {
+      const moved = await this.txns.transition(c, id, 'authorized', 'payer_charged', version);
+      if (!moved) return null;
+      // Double-entry: payer debited, our settlement account credited.
+      await this.txns.writeLedger(c, id, [
+        { account: `payer:${moved.payer_user_id}`, direction: 'debit', amountKobo: moved.amount_kobo },
+        { account: 'platform:settlement', direction: 'credit', amountKobo: moved.amount_kobo },
+      ]);
+      // Transactional outbox: queue the payout leg, committed with the charge.
+      await this.txns.insertOutbox(c, id, 'payout.requested', {
+        transactionId: id,
+        amountKobo: moved.amount_kobo,
+      });
+      return moved;
+    });
+    const finalRow = result ?? (await this.txns.findById(id))!;
+    this.logger.log(`Transaction ${id} charged (${providerReference})`);
+    return this.toPublic(finalRow);
+  }
+
+  // Called by the webhook when the hosted checkout reports success.
+  async chargeFromCheckout(orderReference: string) {
+    const id = await this.redis.get(`nomba:order:${orderReference}`);
+    if (!id) {
+      this.logger.warn(`Checkout webhook for unknown order ${orderReference}`);
+      return;
+    }
+    await this.applyCharge(id, `checkout_${orderReference}`);
+    await this.redis.del(`nomba:order:${orderReference}`).catch(() => undefined);
   }
 
   async getById(id: string, userId: string) {

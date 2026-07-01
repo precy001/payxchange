@@ -25,3 +25,9 @@ export class DeleteAccountDto {
   @Matches(PIN, { message: 'pin must be 4 digits' })
   pin!: string;
 }
+
+export class FreezeDto {
+  @IsString()
+  @Matches(PIN, { message: 'pin must be 4 digits' })
+  pin!: string;
+}

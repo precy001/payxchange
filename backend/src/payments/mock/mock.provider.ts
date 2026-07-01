@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   BankLookupInput,
   BankLookupResult,
+  CheckoutOrderResult,
   ChargeResult,
   ChargeTokenizedCardInput,
+  CreateCheckoutInput,
   PaymentProvider,
   TransferResult,
   TransferToBankInput,
@@ -23,6 +25,7 @@ import {
 @Injectable()
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = 'mock';
+  readonly usesHostedCheckout = false; // mock charges synchronously
   private readonly logger = new Logger(MockPaymentProvider.name);
 
   private outcome(): 'success' | 'fail' | 'timeout' | 'pending' {
@@ -37,6 +40,15 @@ export class MockPaymentProvider implements PaymentProvider {
       providerReference: `mock_chg_${input.reference}`,
       status: 'success',
       raw: { mock: true, ...input },
+    };
+  }
+
+  // Not used (usesHostedCheckout is false) but required by the interface.
+  async createCheckoutOrder(input: CreateCheckoutInput): Promise<CheckoutOrderResult> {
+    return {
+      checkoutUrl: `https://mock.local/checkout/${input.orderReference}`,
+      orderReference: input.orderReference,
+      raw: { mock: true },
     };
   }
 

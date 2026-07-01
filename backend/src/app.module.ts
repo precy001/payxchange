@@ -14,6 +14,7 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { AuthModule } from './auth/auth.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { DisputesModule } from './disputes/disputes.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -36,6 +37,7 @@ import { HealthController } from './health/health.controller';
     AuthModule,
     WebhooksModule,
     NotificationsModule,
+    DisputesModule,
   ],
   controllers: [HealthController],
   providers: [

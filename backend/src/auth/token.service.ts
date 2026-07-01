@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
 import { REDIS } from '../infra/redis.module';
+import { SessionsRepository } from './sessions.repository';
 
 // Token rules:
 //  - Access token: short-lived (15 min) signed JWT. Carries the user id. Can't
@@ -23,15 +24,20 @@ export class TokenService {
   constructor(
     private readonly jwt: JwtService,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly sessions: SessionsRepository,
   ) {}
 
-  async issueAuthTokens(userId: string) {
+  async issueAuthTokens(userId: string, sessionId?: string) {
     const accessToken = await this.jwt.signAsync(
-      { sub: userId, typ: 'access' },
+      { sub: userId, typ: 'access', ...(sessionId ? { sid: sessionId } : {}) },
       { expiresIn: ACCESS_TTL },
     );
     const refreshToken = crypto.randomBytes(32).toString('base64url');
-    await this.redis.set(`refresh:${refreshToken}`, userId, 'EX', REFRESH_TTL_SECONDS);
+    // Refresh value carries the session so rotation can keep it and we can
+    // reject a refresh once its session is revoked. Legacy values (just userId)
+    // stay valid for already-logged-in devices.
+    const value = sessionId ? `${userId}:${sessionId}` : userId;
+    await this.redis.set(`refresh:${refreshToken}`, value, 'EX', REFRESH_TTL_SECONDS);
     return {
       tokenType: 'Bearer',
       accessToken,
@@ -58,12 +64,25 @@ export class TokenService {
   }
 
   // Rotation: getdel atomically reads and deletes, so a refresh token works
-  // exactly once.
+  // exactly once. If the token belongs to a session, that session must still be
+  // active — this is how a remotely-revoked device gets locked out.
   async rotateRefresh(refreshToken: string) {
-    const userId = await this.redis.getdel(`refresh:${refreshToken}`);
-    if (!userId) {
+    const value = await this.redis.getdel(`refresh:${refreshToken}`);
+    if (!value) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
-    return this.issueAuthTokens(userId);
+    const sep = value.indexOf(':');
+    const userId = sep === -1 ? value : value.slice(0, sep);
+    const sessionId = sep === -1 ? undefined : value.slice(sep + 1);
+
+    if (sessionId) {
+      const session = await this.sessions.findById(sessionId);
+      if (!session || session.revoked_at) {
+        throw new UnauthorizedException('This session has been signed out');
+      }
+      await this.sessions.touch(sessionId);
+    }
+
+    return this.issueAuthTokens(userId, sessionId);
   }
 }
