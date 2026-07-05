@@ -1,13 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { CreateFundingSourceDto } from './dto/create-funding-source.dto';
 import { FundingSourceRow, FundingSourcesRepository } from './funding-sources.repository';
+import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.interface';
 
 const FK_VIOLATION = '23503';
 
 @Injectable()
 export class FundingSourcesService {
-  constructor(private readonly repo: FundingSourcesRepository) {}
+  constructor(
+    private readonly repo: FundingSourcesRepository,
+    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+  ) {}
 
   async create(userId: string, dto: CreateFundingSourceDto) {
     const existing = await this.repo.countForUser(userId);
@@ -33,7 +37,14 @@ export class FundingSourcesService {
 
   async listByUser(userId: string) {
     const rows = await this.repo.listByUser(userId);
-    return rows.map((r) => this.toPublic(r));
+    // Only show cards the current provider can actually use, so a leftover mock
+    // card doesn't get picked when running on Paystack (and vice versa).
+    return rows.filter((r) => this.provider.canAutoCharge(r.squad_ref)).map((r) => this.toPublic(r));
+  }
+
+  async remove(userId: string, id: string): Promise<{ removed: boolean }> {
+    const removed = await this.repo.deleteForUser(userId, id);
+    return { removed };
   }
 
   private toPublic(r: FundingSourceRow) {

@@ -54,10 +54,9 @@ export class WebhooksService {
       if (orderReference) {
         // Paystack includes the reusable card on charge.success — save it.
         const auth = data?.authorization;
-        const card =
-          auth?.authorization_code && auth?.reusable
-            ? { token: auth.authorization_code, brand: auth.card_type, last4: auth.last4 }
-            : undefined;
+        const card = auth?.authorization_code
+          ? { token: auth.authorization_code, brand: auth.card_type, last4: auth.last4 }
+          : undefined;
         await this.transactions.chargeFromCheckout(orderReference, card);
         this.logger.log(`Checkout paid — order ${orderReference}`);
       } else {

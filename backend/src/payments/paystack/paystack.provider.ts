@@ -78,17 +78,19 @@ export class PaystackProvider implements PaymentProvider {
       this.logger.log(`[paystack] /transaction/verify ref=${reference} status=${status}`);
       if (status !== 'success') return { paid: false };
       const auth = d?.authorization;
-      const card =
-        auth?.authorization_code && auth?.reusable
-          ? {
-              token: auth.authorization_code,
-              last4: auth.last4,
-              brand: auth.card_type,
-              bank: auth.bank,
-              expMonth: auth.exp_month,
-              expYear: auth.exp_year,
-            }
-          : undefined;
+      // Save the card whenever Paystack returns an authorization code. Most cards
+      // are reusable; if one isn't, a later auto-charge simply falls back to
+      // checkout, so saving it is safe and maximises the "saved card" hit rate.
+      const card = auth?.authorization_code
+        ? {
+            token: auth.authorization_code,
+            last4: auth.last4,
+            brand: auth.card_type,
+            bank: auth.bank,
+            expMonth: auth.exp_month,
+            expYear: auth.exp_year,
+          }
+        : undefined;
       return { paid: true, card };
     } catch (err: any) {
       this.logger.warn(`[paystack] verify ${reference} failed: ${err?.response?.status ?? err?.message}`);

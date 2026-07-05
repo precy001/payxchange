@@ -81,4 +81,12 @@ export class FundingSourcesRepository {
     );
     return res.rows[0];
   }
+
+  async deleteForUser(userId: string, id: string): Promise<boolean> {
+    const res = await this.db.query(
+      `DELETE FROM funding_sources WHERE id = $1 AND user_id = $2`,
+      [id, userId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
 }

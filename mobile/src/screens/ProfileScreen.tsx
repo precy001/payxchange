@@ -158,6 +158,12 @@ export default function ProfileScreen() {
         />
         <View style={styles.divider} />
         <Row
+          icon="card-outline"
+          label="Payment methods"
+          onPress={() => navigation.navigate('Cards')}
+        />
+        <View style={styles.divider} />
+        <Row
           icon="phone-portrait-outline"
           label="Devices & sessions"
           onPress={() => navigation.navigate('Sessions')}

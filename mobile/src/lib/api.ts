@@ -92,6 +92,7 @@ export const api = {
   me: () => request('/users/me', { auth: true }),
 
   myCards: () => request('/funding-sources/me', { auth: true }),
+  removeCard: (id: string) => request(`/funding-sources/${id}`, { method: 'DELETE', auth: true }),
 
   createPaymentRequest: (input: { type: 'p2p' | 'merchant'; amountKobo: number; description: string }) =>
     request('/payment-requests', { method: 'POST', auth: true, body: input }),

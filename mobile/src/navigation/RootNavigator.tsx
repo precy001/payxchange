@@ -21,6 +21,7 @@ import ChangePinScreen from '../screens/ChangePinScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import FreezeAccountScreen from '../screens/FreezeAccountScreen';
 import SessionsScreen from '../screens/SessionsScreen';
+import CardsScreen from '../screens/CardsScreen';
 import ReportProblemScreen from '../screens/ReportProblemScreen';
 import DisputesScreen from '../screens/DisputesScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
@@ -48,6 +49,7 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   FreezeAccount: undefined;
   Sessions: undefined;
+  Cards: undefined;
   ReportProblem: { txn: Txn };
   Disputes: undefined;
   TransactionDetail: { txn: Txn };
@@ -91,6 +93,7 @@ export default function RootNavigator() {
           <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
           <Stack.Screen name="FreezeAccount" component={FreezeAccountScreen} />
           <Stack.Screen name="Sessions" component={SessionsScreen} />
+          <Stack.Screen name="Cards" component={CardsScreen} />
           <Stack.Screen name="ReportProblem" component={ReportProblemScreen} />
           <Stack.Screen name="Disputes" component={DisputesScreen} />
           <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />
