@@ -26,6 +26,11 @@ export class PaystackProvider implements PaymentProvider {
   readonly name = 'paystack';
   readonly usesHostedCheckout = true;
   private readonly logger = new Logger(PaystackProvider.name);
+
+  // Only a real Paystack reusable authorization can be auto-charged.
+  canAutoCharge(token: string): boolean {
+    return typeof token === 'string' && token.startsWith('AUTH_');
+  }
   private readonly http: AxiosInstance;
   private readonly secretKey: string;
 

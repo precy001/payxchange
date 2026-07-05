@@ -23,6 +23,9 @@ import { NombaClient } from './nomba.client';
 export class NombaProvider implements PaymentProvider {
   readonly name = 'nomba';
   readonly usesHostedCheckout = true; // inbound is Nomba Checkout, not a token charge
+  canAutoCharge(): boolean {
+    return false; // Nomba path always uses hosted checkout
+  }
   private readonly logger = new Logger(NombaProvider.name);
 
   constructor(

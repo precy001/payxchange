@@ -95,6 +95,10 @@ export interface PaymentProvider {
   // a silent server-side charge. Lets the core branch the confirm flow.
   readonly usesHostedCheckout: boolean;
 
+  // Whether a stored token can be charged silently by THIS provider (e.g. a real
+  // Paystack authorization). Guards against charging a leftover/foreign token.
+  canAutoCharge(token: string): boolean;
+
   chargeTokenizedCard(input: ChargeTokenizedCardInput): Promise<ChargeResult>;
 
   // Create a hosted checkout order; returns a URL for the payer to pay on.

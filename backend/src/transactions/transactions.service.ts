@@ -159,11 +159,11 @@ export class TransactionsService {
     const payer = await this.users.findById(txn.payer_user_id);
 
     if (this.provider.usesHostedCheckout) {
-      // If the payer has a saved card, charge it silently — no WebView. This is
-      // the automatic path for every payment after the first.
+      // If the payer has a real saved card for THIS provider, charge it silently
+      // — no WebView. This is the automatic path for payments after the first.
       if (txn.funding_source_id) {
         const fs = await this.funding.findById(txn.funding_source_id);
-        if (fs?.squad_ref) {
+        if (fs?.squad_ref && this.provider.canAutoCharge(fs.squad_ref)) {
           const charge = await this.provider.chargeTokenizedCard({
             amountKobo: Number(txn.amount_kobo) + Number(txn.fee_kobo),
             currency: txn.currency,
@@ -174,18 +174,14 @@ export class TransactionsService {
           if (charge.success) {
             return this.applyCharge(id, charge.providerReference, txn.version);
           }
-          await this.db.withTransaction((c) =>
-            this.txns.transition(c, id, 'authorized', 'failed', txn!.version),
-          );
-          throw new HttpException(
-            { message: 'Your saved card could not be charged', transactionId: id, state: 'failed' },
-            HttpStatus.PAYMENT_REQUIRED,
-          );
+          // Auto-charge failed (declined / expired token). Don't dead-end — fall
+          // through to hosted checkout so the payer can pay (and re-capture).
+          this.logger.warn(`Auto-charge failed for ${id}; falling back to checkout`);
         }
       }
 
-      // No saved card → hosted checkout to capture one. The charge is confirmed
-      // by verifyAndCharge (or the webhook), which also saves the card.
+      // No usable saved card → hosted checkout to capture one. The charge is
+      // confirmed by verifyAndCharge (or the webhook), which also saves the card.
       const publicBase = (process.env.PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
       const order = await this.provider.createCheckoutOrder({
         amountKobo: Number(txn.amount_kobo) + Number(txn.fee_kobo),

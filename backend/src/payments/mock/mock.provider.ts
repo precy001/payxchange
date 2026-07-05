@@ -26,6 +26,9 @@ import {
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = 'mock';
   readonly usesHostedCheckout = false; // mock charges synchronously
+  canAutoCharge(): boolean {
+    return true; // mock charges anything
+  }
   private readonly logger = new Logger(MockPaymentProvider.name);
 
   private outcome(): 'success' | 'fail' | 'timeout' | 'pending' {
