@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import Redis from 'ioredis';
 import { REDIS } from '../infra/redis.module';
 import { DatabaseService } from '../infra/database.module';
+import { computeFeeKobo } from './fees';
 import {
   PAYMENT_PROVIDER,
   PaymentProvider,
@@ -40,7 +41,7 @@ export class TransactionsService {
   ) {}
 
   // ---- INITIATE: payer scans -> PENDING transaction -------------------------
-  async initiate(input: { token: string; payerUserId: string; fundingSourceId: string }) {
+  async initiate(input: { token: string; payerUserId: string; fundingSourceId?: string }) {
     // A frozen account cannot move money.
     const payer = await this.users.findById(input.payerUserId);
     if (payer?.frozen_at) {
@@ -53,13 +54,19 @@ export class TransactionsService {
       throw new GoneException('This code is invalid, used, or expired');
     }
 
-    // The card must exist, belong to the payer, and be active.
-    const fs = await this.funding.findById(input.fundingSourceId);
-    if (!fs || fs.user_id !== input.payerUserId) {
-      throw new ForbiddenException('That payment method does not belong to you');
-    }
-    if (fs.status !== 'active') {
-      throw new BadRequestException('That payment method is not active');
+    // A saved card is optional. If one is given it must belong to the payer and
+    // be active (that's the silent auto-charge path). If none is given, this is a
+    // first-time payment that will capture a card via hosted checkout.
+    let fsId: string | null = null;
+    if (input.fundingSourceId) {
+      const fs = await this.funding.findById(input.fundingSourceId);
+      if (!fs || fs.user_id !== input.payerUserId) {
+        throw new ForbiddenException('That payment method does not belong to you');
+      }
+      if (fs.status !== 'active') {
+        throw new BadRequestException('That payment method is not active');
+      }
+      fsId = fs.id;
     }
 
     const txn = await this.db.withTransaction(async (client) => {
@@ -84,9 +91,10 @@ export class TransactionsService {
         paymentRequestId: pr.id,
         payerUserId: input.payerUserId,
         payeeUserId: pr.payee_user_id,
-        fundingSourceId: fs.id,
+        fundingSourceId: fsId,
         type: pr.type,
         amountKobo: pr.amount_kobo,
+        feeKobo: String(computeFeeKobo(Number(pr.amount_kobo))),
         currency: pr.currency,
         collectionRef,
       });
@@ -151,12 +159,36 @@ export class TransactionsService {
     const payer = await this.users.findById(txn.payer_user_id);
 
     if (this.provider.usesHostedCheckout) {
-      // Hosted checkout: create an order and hand the app a URL to pay on. The
-      // charge is confirmed later by the payment_success webhook, which calls
-      // chargeFromCheckout(). The txn stays AUTHORIZED until then.
+      // If the payer has a saved card, charge it silently — no WebView. This is
+      // the automatic path for every payment after the first.
+      if (txn.funding_source_id) {
+        const fs = await this.funding.findById(txn.funding_source_id);
+        if (fs?.squad_ref) {
+          const charge = await this.provider.chargeTokenizedCard({
+            amountKobo: Number(txn.amount_kobo) + Number(txn.fee_kobo),
+            currency: txn.currency,
+            customerEmail: payer?.email ?? 'payer@payxchange.app',
+            tokenKey: fs.squad_ref,
+            reference: txn.collection_ref,
+          });
+          if (charge.success) {
+            return this.applyCharge(id, charge.providerReference, txn.version);
+          }
+          await this.db.withTransaction((c) =>
+            this.txns.transition(c, id, 'authorized', 'failed', txn!.version),
+          );
+          throw new HttpException(
+            { message: 'Your saved card could not be charged', transactionId: id, state: 'failed' },
+            HttpStatus.PAYMENT_REQUIRED,
+          );
+        }
+      }
+
+      // No saved card → hosted checkout to capture one. The charge is confirmed
+      // by verifyAndCharge (or the webhook), which also saves the card.
       const publicBase = (process.env.PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
       const order = await this.provider.createCheckoutOrder({
-        amountKobo: Number(txn.amount_kobo),
+        amountKobo: Number(txn.amount_kobo) + Number(txn.fee_kobo),
         currency: txn.currency,
         customerEmail: payer?.email ?? 'payer@payxchange.app',
         orderReference: txn.collection_ref,
@@ -169,12 +201,12 @@ export class TransactionsService {
     }
 
     // Synchronous charge (mock / token providers). Dedupes on collection_ref.
-    const fs = await this.funding.findById(txn.funding_source_id);
+    const fs = txn.funding_source_id ? await this.funding.findById(txn.funding_source_id) : null;
     const charge = await this.provider.chargeTokenizedCard({
-      amountKobo: Number(txn.amount_kobo),
+      amountKobo: Number(txn.amount_kobo) + Number(txn.fee_kobo),
       currency: txn.currency,
       customerEmail: payer?.email ?? 'unknown@scanpay.local',
-      tokenKey: fs!.squad_ref,
+      tokenKey: fs?.squad_ref ?? 'mock',
       reference: txn.collection_ref,
     });
 
@@ -205,11 +237,19 @@ export class TransactionsService {
     const result = await this.db.withTransaction(async (c) => {
       const moved = await this.txns.transition(c, id, 'authorized', 'payer_charged', version);
       if (!moved) return null;
-      // Double-entry: payer debited, our settlement account credited.
-      await this.txns.writeLedger(c, id, [
-        { account: `payer:${moved.payer_user_id}`, direction: 'debit', amountKobo: moved.amount_kobo },
-        { account: 'platform:settlement', direction: 'credit', amountKobo: moved.amount_kobo },
-      ]);
+      // Double-entry: payer is debited amount + fee; the amount goes to our
+      // settlement account (to be paid out to the payee) and the fee to our
+      // fee-income account. Debits and credits balance.
+      const amount = Number(moved.amount_kobo);
+      const fee = Number(moved.fee_kobo);
+      const entries = [
+        { account: `payer:${moved.payer_user_id}`, direction: 'debit' as const, amountKobo: String(amount + fee) },
+        { account: 'platform:settlement', direction: 'credit' as const, amountKobo: String(amount) },
+      ];
+      if (fee > 0) {
+        entries.push({ account: 'platform:fees', direction: 'credit' as const, amountKobo: String(fee) });
+      }
+      await this.txns.writeLedger(c, id, entries);
       // Transactional outbox: queue the payout leg, committed with the charge.
       await this.txns.insertOutbox(c, id, 'payout.requested', {
         transactionId: id,
@@ -222,15 +262,49 @@ export class TransactionsService {
     return this.toPublic(finalRow);
   }
 
-  // Called by the webhook when the hosted checkout reports success.
-  async chargeFromCheckout(orderReference: string) {
+  // Called by the webhook when the hosted checkout reports success. Optionally
+  // carries the reusable card to save for future auto-charges.
+  async chargeFromCheckout(orderReference: string, card?: { token: string; brand?: string; last4?: string }) {
     const id = await this.redis.get(`nomba:order:${orderReference}`);
     if (!id) {
       this.logger.warn(`Checkout webhook for unknown order ${orderReference}`);
       return;
     }
+    const txn = await this.txns.findById(id);
     await this.applyCharge(id, `checkout_${orderReference}`);
+    if (card?.token && txn) {
+      await this.funding.upsertCard({ userId: txn.payer_user_id, token: card.token, brand: card.brand, last4: card.last4 }).catch(() => undefined);
+    }
     await this.redis.del(`nomba:order:${orderReference}`).catch(() => undefined);
+  }
+
+  // Webhook-independent confirmation: the app calls this and we ask the provider
+  // directly whether the payment went through, charging (and saving the card) if
+  // so. Makes confirmation reliable even when the webhook is delayed/undelivered.
+  async verifyAndCharge(id: string, userId: string) {
+    const txn = await this.txns.findById(id);
+    if (!txn) throw new NotFoundException('Transaction not found');
+    if (txn.payer_user_id !== userId) {
+      throw new ForbiddenException('You cannot verify this transaction');
+    }
+    if (['payer_charged', 'payout_pending', 'payout_sent', 'completed'].includes(txn.state)) {
+      return this.toPublic(txn); // already charged
+    }
+    if (txn.state !== 'authorized') {
+      return this.toPublic(txn); // failed/expired — nothing to verify
+    }
+    const { paid, card } = await this.provider.verifyCheckoutPayment(txn.collection_ref);
+    if (paid) {
+      const result = await this.applyCharge(id, `verify_${txn.collection_ref}`);
+      if (card?.token) {
+        // Save the card so this payer's next payment is automatic.
+        await this.funding
+          .upsertCard({ userId, token: card.token, brand: card.brand, last4: card.last4 })
+          .catch(() => undefined);
+      }
+      return result;
+    }
+    return this.toPublic(txn); // not paid yet
   }
 
   async getById(id: string, userId: string) {
@@ -324,6 +398,7 @@ export class TransactionsService {
       state: t.state,
       type: t.type,
       amountKobo: Number(t.amount_kobo),
+      feeKobo: Number(t.fee_kobo),
       currency: t.currency,
       payerUserId: t.payer_user_id,
       payeeUserId: t.payee_user_id,

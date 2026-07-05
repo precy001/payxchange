@@ -9,7 +9,7 @@ export interface AppConfig {
   redisUrl: string;
   // 'mock' = deterministic fake provider (build & test with no Nomba calls).
   // 'nomba' = the real adapter using your test/live keys.
-  paymentsDriver: 'mock' | 'nomba';
+  paymentsDriver: 'mock' | 'nomba' | 'paystack';
   jwt: {
     secret: string;
   };
@@ -20,6 +20,10 @@ export interface AppConfig {
     accountId: string;
     webhookSignatureKey: string;
     webhookSigAlgo: string;
+  };
+  paystack: {
+    baseUrl: string;
+    secretKey: string;
   };
 }
 
@@ -32,7 +36,7 @@ function required(name: string): string {
 }
 
 export function loadConfig(): AppConfig {
-  const paymentsDriver = (process.env.PAYMENTS_DRIVER ?? 'mock') as 'mock' | 'nomba';
+  const paymentsDriver = (process.env.PAYMENTS_DRIVER ?? 'mock') as 'mock' | 'nomba' | 'paystack';
   const isProd = (process.env.NODE_ENV ?? 'development') === 'production';
   // Demand Nomba credentials only in PRODUCTION with the nomba driver. In dev we
   // run against the no-signup sandbox (https://sandbox.nomba.com), which needs
@@ -56,6 +60,15 @@ export function loadConfig(): AppConfig {
       accountId: need('NOMBA_ACCOUNT_ID'),
       webhookSignatureKey: need('NOMBA_WEBHOOK_SIGNATURE_KEY'),
       webhookSigAlgo: process.env.NOMBA_WEBHOOK_SIG_ALGO ?? 'sha256',
+    },
+    paystack: {
+      baseUrl: process.env.PAYSTACK_BASE_URL ?? 'https://api.paystack.co',
+      // Paystack always needs the secret key (no no-auth mode). Require it when
+      // the paystack driver is selected. It's also the webhook signing key.
+      secretKey:
+        paymentsDriver === 'paystack'
+          ? required('PAYSTACK_SECRET_KEY')
+          : process.env.PAYSTACK_SECRET_KEY ?? '',
     },
   };
 }

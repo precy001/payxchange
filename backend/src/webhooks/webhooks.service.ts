@@ -46,15 +46,22 @@ export class WebhooksService {
       return { duplicate: true };
     }
 
-    // Inbound checkout success: Nomba echoes our orderReference back.
-    if (eventType === 'payment_success') {
+    // Inbound checkout success. Nomba echoes our orderReference in data.order;
+    // Paystack (charge.success) echoes it as data.reference.
+    if (eventType === 'payment_success' || eventType === 'charge.success') {
       const orderReference: string | undefined =
-        data?.order?.orderReference ?? data?.orderReference;
+        data?.order?.orderReference ?? data?.orderReference ?? data?.reference;
       if (orderReference) {
-        await this.transactions.chargeFromCheckout(orderReference);
+        // Paystack includes the reusable card on charge.success — save it.
+        const auth = data?.authorization;
+        const card =
+          auth?.authorization_code && auth?.reusable
+            ? { token: auth.authorization_code, brand: auth.card_type, last4: auth.last4 }
+            : undefined;
+        await this.transactions.chargeFromCheckout(orderReference, card);
         this.logger.log(`Checkout paid — order ${orderReference}`);
       } else {
-        this.logger.warn('payment_success carried no orderReference');
+        this.logger.warn(`${eventType} carried no order reference`);
       }
       await this.repo.markProcessed(id);
       return { ok: true, eventType, orderReference };
@@ -63,9 +70,13 @@ export class WebhooksService {
     // Payout result events (our own payout.* / simulator).
     const transactionId: string | undefined = data.transactionId ?? this.parseTxnId(data.reference);
     if (transactionId) {
-      if (eventType === 'payout.success') {
-        await this.payout.confirmPayoutSuccess(transactionId, data.sessionId ?? null);
-      } else if (eventType === 'payout.failed') {
+      if (eventType === 'payout.success' || eventType === 'transfer.success') {
+        await this.payout.confirmPayoutSuccess(transactionId, data.sessionId ?? data.reference ?? null);
+      } else if (
+        eventType === 'payout.failed' ||
+        eventType === 'transfer.failed' ||
+        eventType === 'transfer.reversed'
+      ) {
         await this.payout.failPayout(transactionId);
       } else {
         this.logger.log(`Unhandled webhook event type: ${eventType}`);

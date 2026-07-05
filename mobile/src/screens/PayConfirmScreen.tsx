@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { api, ApiError } from '../lib/api';
 import { formatNaira } from '../lib/money';
+import { computeFeeKobo } from '../lib/fees';
 import Button from '../components/Button';
 import Skeleton from '../components/Skeleton';
 import { font, radius, spacing } from '../theme';
@@ -48,12 +49,16 @@ export default function PayConfirmScreen() {
     }
   };
 
+  const [useNewCard, setUseNewCard] = useState(false);
+
   const onPay = async () => {
-    if (!card) return;
     setPaying(true);
     setError(null);
     try {
-      const txn = await api.initiateTransaction({ token, fundingSourceId: card.id });
+      // Pay with the saved card (silent auto-charge) unless the payer chose a new
+      // one, or has none — in which case we omit it and checkout captures a card.
+      const fundingSourceId = !useNewCard && card ? card.id : undefined;
+      const txn = await api.initiateTransaction({ token, fundingSourceId });
       navigation.replace('PayPin', {
         transactionId: txn.id,
         amountKobo: details.amountKobo,
@@ -94,27 +99,48 @@ export default function PayConfirmScreen() {
               <Text style={styles.descText}>{details.description}</Text>
             </View>
 
+            <View style={styles.breakdown}>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Amount</Text>
+                <Text style={styles.breakdownValue}>{formatNaira(details.amountKobo)}</Text>
+              </View>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>PayXchange fee</Text>
+                <Text style={styles.breakdownValue}>{formatNaira(computeFeeKobo(details.amountKobo))}</Text>
+              </View>
+              <View style={[styles.breakdownRow, styles.breakdownTotal]}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.totalValue}>
+                  {formatNaira(details.amountKobo + computeFeeKobo(details.amountKobo))}
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.cardRow}>
               <Ionicons name="card-outline" size={18} color={colors.inkSoft} />
-              {card ? (
+              {card && !useNewCard ? (
                 <Text style={styles.cardText}>
                   {(card.brand ?? 'Card')} •••• {card.last4}
                 </Text>
               ) : (
-                <Pressable onPress={addCard}>
-                  <Text style={styles.addCard}>+ Add a card to pay</Text>
-                </Pressable>
+                <Text style={styles.cardText}>New card — you'll enter it once</Text>
               )}
             </View>
+            {card ? (
+              <Pressable onPress={() => setUseNewCard((v) => !v)} hitSlop={8}>
+                <Text style={styles.switchCard}>
+                  {useNewCard ? 'Use my saved card' : 'Use a different card'}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {error ? <Text style={styles.inlineErr}>{error}</Text> : null}
           </View>
 
           <Button
-            title={`Pay ${formatNaira(details.amountKobo)}`}
+            title={`Pay ${formatNaira(details.amountKobo + computeFeeKobo(details.amountKobo))}`}
             onPress={onPay}
             loading={paying}
-            disabled={!card}
           />
         </>
       )}
@@ -131,6 +157,14 @@ const makeStyles = (colors: Palette) =>
   payingTo: { fontFamily: font.regular, fontSize: 15, color: colors.muted },
   payee: { fontFamily: font.bold, fontSize: 20, color: colors.ink, marginTop: spacing.xs, marginBottom: spacing.xl },
   amount: { fontFamily: font.extrabold, fontSize: 48, color: colors.ink, letterSpacing: -1 },
+  breakdown: { alignSelf: 'stretch', marginTop: spacing.xl, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md },
+  breakdownLabel: { fontFamily: font.regular, fontSize: 15, color: colors.muted },
+  breakdownValue: { fontFamily: font.semibold, fontSize: 15, color: colors.ink },
+  breakdownTotal: { borderTopWidth: 1, borderTopColor: colors.line },
+  totalLabel: { fontFamily: font.bold, fontSize: 15, color: colors.ink },
+  totalValue: { fontFamily: font.extrabold, fontSize: 17, color: colors.primary },
+  switchCard: { fontFamily: font.semibold, fontSize: 13, color: colors.primary, marginTop: spacing.sm },
   descPill: {
     backgroundColor: colors.bgSoft,
     borderRadius: radius.pill,

@@ -1,6 +1,8 @@
-import { Body, Controller, ForbiddenException, Headers, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Headers, Post, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
+import { RawBodyRequest } from '@nestjs/common';
+import { Request } from 'express';
 import { Public } from '../auth/public.decorator';
 import { WebhooksService } from './webhooks.service';
 
@@ -16,10 +18,19 @@ export class WebhooksController {
   @Public()
   @Post('nomba')
   async nomba(@Body() body: any, @Headers('x-nomba-signature') signature: string) {
-    // NOTE: for byte-exact HMAC in production, capture the untouched raw request
-    // body (a body-parser `verify` hook) and pass that here. On the mock
-    // provider, verifyWebhookSignature returns true so re-serializing is fine.
     const rawBody = Buffer.from(JSON.stringify(body ?? {}));
+    return this.webhooks.handle(rawBody, signature ?? '');
+  }
+
+  // Paystack posts here. We use the untouched raw bytes so the HMAC-SHA512
+  // signature verifies exactly.
+  @Public()
+  @Post('paystack')
+  async paystack(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('x-paystack-signature') signature: string,
+  ) {
+    const rawBody = req.rawBody ?? Buffer.from(JSON.stringify((req as any).body ?? {}));
     return this.webhooks.handle(rawBody, signature ?? '');
   }
 

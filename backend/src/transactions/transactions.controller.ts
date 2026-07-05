@@ -45,4 +45,11 @@ export class TransactionsController {
   get(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.service.getById(id, userId);
   }
+
+  // POST /transactions/:id/verify — actively confirm a hosted-checkout payment
+  // with the provider (webhook-independent), charging if it went through.
+  @Post(':id/verify')
+  verify(@CurrentUser() userId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.verifyAndCharge(id, userId);
+  }
 }

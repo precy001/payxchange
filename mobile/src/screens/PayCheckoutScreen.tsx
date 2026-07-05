@@ -9,10 +9,11 @@ import { useAuth } from '../auth/AuthContext';
 import { font, radius, spacing } from '../theme';
 import { useTheme, Palette } from '../theme/ThemeContext';
 
-// States that mean the payer's payment went through (charge confirmed by the
-// webhook). Anything here -> success. 'failed'/'reversed' -> payment failed.
 const PAID = ['payer_charged', 'payout_pending', 'payout_sent', 'completed'];
 const FAILED = ['failed', 'reversed', 'reversing', 'payout_failed'];
+// The checkout page redirects here when done (see the provider's callback_url).
+// We detect it and confirm — we never actually load this URL.
+const RETURN_MARKER = 'payxchange.app/paid';
 
 export default function PayCheckoutScreen() {
   const insets = useSafeAreaInsets();
@@ -28,17 +29,15 @@ export default function PayCheckoutScreen() {
   const [waited, setWaited] = useState(false);
   const settled = useRef(false);
 
-  // Opening a payment page can pop system UI; don't let the lock fire mid-pay.
   useEffect(() => {
     setLockSuspended(true);
-    const hint = setTimeout(() => setWaited(true), 20000);
+    const hint = setTimeout(() => setWaited(true), 15000);
     return () => {
       setLockSuspended(false);
       clearTimeout(hint);
     };
   }, []);
 
-  // Decide based on a fetched transaction. Returns true if we navigated away.
   const evaluate = (state: string): boolean => {
     if (PAID.includes(state)) {
       settled.current = true;
@@ -55,38 +54,43 @@ export default function PayCheckoutScreen() {
     return false;
   };
 
-  // Auto-poll the transaction until the webhook confirms (or fails) the payment.
-  useEffect(() => {
-    if (!transactionId) return;
-    const timer = setInterval(async () => {
-      if (settled.current) return;
-      try {
-        const txn = await api.getTransaction(transactionId);
-        if (!settled.current) evaluate(txn.state);
-      } catch {
-        // transient — keep polling
-      }
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [transactionId]);
-
-  // Manual re-check (also surfaces any error so we're never stuck silently).
-  const checkNow = async () => {
-    if (checking || settled.current) return;
-    setChecking(true);
+  // Authoritative confirmation: asks the backend to verify with the provider
+  // (charges if paid). Works even if the webhook never arrives.
+  const confirm = async (announce: boolean) => {
+    if (settled.current) return;
     try {
-      const txn = await api.getTransaction(transactionId);
-      if (!evaluate(txn.state)) {
+      const txn = await api.verifyCheckout(transactionId);
+      if (!settled.current && !evaluate(txn.state) && announce) {
         Alert.alert(
           'Not confirmed yet',
-          'We haven’t received confirmation of your payment. If you’ve finished paying, give it a few seconds and try again.',
+          'We haven’t confirmed your payment. If you’ve finished paying, wait a moment and tap again.',
         );
       }
     } catch (e) {
-      Alert.alert('Could not check status', (e as ApiError).message || 'Please try again.');
-    } finally {
-      setChecking(false);
+      // Fall back to a plain status read (in case the webhook already charged it).
+      try {
+        const t = await api.getTransaction(transactionId);
+        if (!settled.current && !evaluate(t.state) && announce) {
+          Alert.alert('Could not confirm', (e as ApiError).message || 'Please try again.');
+        }
+      } catch {
+        if (announce) Alert.alert('Could not confirm', 'Please try again.');
+      }
     }
+  };
+
+  // Background loop: confirm every few seconds until settled.
+  useEffect(() => {
+    if (!transactionId) return;
+    const timer = setInterval(() => confirm(false), 3000);
+    return () => clearInterval(timer);
+  }, [transactionId]);
+
+  const onCheck = async () => {
+    if (checking || settled.current) return;
+    setChecking(true);
+    await confirm(true);
+    setChecking(false);
   };
 
   const cancel = () => {
@@ -112,6 +116,18 @@ export default function PayCheckoutScreen() {
             source={{ uri: checkoutUrl }}
             onLoadEnd={() => setLoading(false)}
             startInLoadingState
+            // Catch the post-payment redirect: confirm and block the navigation
+            // so the WebView never tries to load the marker page.
+            onShouldStartLoadWithRequest={(req) => {
+              if (req.url && req.url.includes(RETURN_MARKER)) {
+                confirm(false);
+                return false;
+              }
+              return true;
+            }}
+            onNavigationStateChange={(nav) => {
+              if (nav.url && nav.url.includes(RETURN_MARKER)) confirm(false);
+            }}
             style={{ flex: 1, backgroundColor: colors.bg }}
           />
         ) : (
@@ -128,11 +144,9 @@ export default function PayCheckoutScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         {waited && (
-          <Text style={styles.hint}>
-            Finished paying? Tap below to confirm. (If it never confirms, the payment webhook isn’t reaching the server.)
-          </Text>
+          <Text style={styles.hint}>Finished paying? Tap below to confirm.</Text>
         )}
-        <Pressable style={styles.checkBtn} onPress={checkNow} disabled={checking}>
+        <Pressable style={styles.checkBtn} onPress={onCheck} disabled={checking}>
           {checking ? (
             <ActivityIndicator color={colors.white} />
           ) : (

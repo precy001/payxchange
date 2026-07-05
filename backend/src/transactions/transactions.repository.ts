@@ -64,9 +64,10 @@ export class TransactionsRepository {
       paymentRequestId: string;
       payerUserId: string;
       payeeUserId: string;
-      fundingSourceId: string;
+      fundingSourceId: string | null;
       type: string;
       amountKobo: string;
+      feeKobo: string;
       currency: string;
       collectionRef: string;
     },
@@ -74,8 +75,8 @@ export class TransactionsRepository {
     const res = await client.query<TransactionRow>(
       `INSERT INTO transactions
          (payment_request_id, payer_user_id, payee_user_id, funding_source_id,
-          type, amount_kobo, currency, collection_ref, state)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending')
+          type, amount_kobo, fee_kobo, currency, collection_ref, state)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')
        RETURNING ${COLS}`,
       [
         input.paymentRequestId,
@@ -84,6 +85,7 @@ export class TransactionsRepository {
         input.fundingSourceId,
         input.type,
         input.amountKobo,
+        input.feeKobo,
         input.currency,
         input.collectionRef,
       ],

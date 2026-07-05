@@ -65,6 +65,12 @@ export class NombaProvider implements PaymentProvider {
     return { checkoutUrl: link, orderReference: input.orderReference, raw: res };
   }
 
+  // The no-signup sandbox has no authenticated status lookup, so we can't verify
+  // on demand — confirmation there comes via the webhook (or the dev simulate).
+  async verifyCheckoutPayment(): Promise<import('../payment-provider.interface').CheckoutVerification> {
+    return { paid: false };
+  }
+
   async chargeTokenizedCard(input: ChargeTokenizedCardInput): Promise<ChargeResult> {
     // The real tokenized-charge endpoint needs auth, and the live pay leg is
     // moving to hosted Checkout anyway. In the no-signup sandbox we shim the

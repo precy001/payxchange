@@ -42,6 +42,22 @@ export interface CheckoutOrderResult {
   raw: unknown;
 }
 
+// A reusable card captured from a successful checkout, so future payments can be
+// charged silently. `token` is the provider's card token — NOT raw card data.
+export interface SavedCardInfo {
+  token: string;
+  last4?: string;
+  brand?: string;
+  bank?: string;
+  expMonth?: string;
+  expYear?: string;
+}
+
+export interface CheckoutVerification {
+  paid: boolean;
+  card?: SavedCardInfo; // present only if the card is reusable
+}
+
 export interface BankLookupInput {
   accountNumber: string;
   bankCode: string;
@@ -83,6 +99,10 @@ export interface PaymentProvider {
 
   // Create a hosted checkout order; returns a URL for the payer to pay on.
   createCheckoutOrder(input: CreateCheckoutInput): Promise<CheckoutOrderResult>;
+
+  // Actively verify an inbound checkout payment by our reference, independent of
+  // the webhook. Returns whether it was paid and any reusable card to save.
+  verifyCheckoutPayment(reference: string): Promise<CheckoutVerification>;
 
   lookupBankAccount(input: BankLookupInput): Promise<BankLookupResult>;
 

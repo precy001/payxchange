@@ -99,7 +99,7 @@ export const api = {
   resolvePaymentRequest: (token: string) =>
     request(`/payment-requests/resolve/${encodeURIComponent(token)}`, { auth: true }),
 
-  initiateTransaction: (input: { token: string; fundingSourceId: string }) =>
+  initiateTransaction: (input: { token: string; fundingSourceId?: string }) =>
     request('/transactions/initiate', { method: 'POST', auth: true, body: input }),
 
   confirmTransaction: (id: string, pin: string) =>
@@ -108,6 +108,8 @@ export const api = {
   listTransactions: () => request('/transactions', { auth: true }),
 
   getTransaction: (id: string) => request(`/transactions/${id}`, { auth: true }),
+
+  verifyCheckout: (id: string) => request(`/transactions/${id}/verify`, { method: 'POST', auth: true }),
 
   monthlySummary: (month: string) =>
     request(`/transactions/summary?month=${month}`, { auth: true }),

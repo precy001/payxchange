@@ -52,6 +52,10 @@ export class MockPaymentProvider implements PaymentProvider {
     };
   }
 
+  async verifyCheckoutPayment(): Promise<import('../payment-provider.interface').CheckoutVerification> {
+    return { paid: true }; // mock payments always "succeed"
+  }
+
   async lookupBankAccount(input: BankLookupInput): Promise<BankLookupResult> {
     return {
       accountName: 'MOCK ACCOUNT HOLDER',

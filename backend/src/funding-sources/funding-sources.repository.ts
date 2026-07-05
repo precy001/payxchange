@@ -62,4 +62,23 @@ export class FundingSourcesRepository {
     );
     return res.rows;
   }
+
+  // Save (or refresh) a captured card token. Idempotent via the
+  // UNIQUE (user_id, type, squad_ref) constraint, so re-capturing is harmless.
+  async upsertCard(input: {
+    userId: string;
+    token: string;
+    brand?: string;
+    last4?: string;
+  }): Promise<FundingSourceRow> {
+    const res = await this.db.query<FundingSourceRow>(
+      `INSERT INTO funding_sources (user_id, type, squad_ref, brand, last4, status)
+       VALUES ($1, 'card', $2, $3, $4, 'active')
+       ON CONFLICT (user_id, type, squad_ref)
+       DO UPDATE SET brand = EXCLUDED.brand, last4 = EXCLUDED.last4, status = 'active'
+       RETURNING id, user_id, type, squad_ref, brand, last4, bank_code, status, is_default, created_at`,
+      [input.userId, input.token, input.brand ?? null, input.last4 ?? null],
+    );
+    return res.rows[0];
+  }
 }
