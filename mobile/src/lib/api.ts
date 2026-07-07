@@ -94,6 +94,17 @@ export const api = {
   myCards: () => request('/funding-sources/me', { auth: true }),
   removeCard: (id: string) => request(`/funding-sources/${id}`, { method: 'DELETE', auth: true }),
 
+  listBanks: () => request('/payout-destinations/banks', { auth: true }),
+  resolvePayoutAccount: (accountNumber: string, bankCode: string) =>
+    request(`/payout-destinations/resolve?accountNumber=${accountNumber}&bankCode=${bankCode}`, { auth: true }),
+  myPayoutDestinations: () => request('/payout-destinations/me', { auth: true }),
+  addPayoutDestination: (bankCode: string, accountNumber: string, accountName?: string) =>
+    request('/payout-destinations', { method: 'POST', auth: true, body: { bankCode, accountNumber, accountName } }),
+  setDefaultPayout: (id: string) =>
+    request(`/payout-destinations/${id}/default`, { method: 'POST', auth: true }),
+  removePayoutDestination: (id: string) =>
+    request(`/payout-destinations/${id}`, { method: 'DELETE', auth: true }),
+
   createPaymentRequest: (input: { type: 'p2p' | 'merchant'; amountKobo: number; description: string }) =>
     request('/payment-requests', { method: 'POST', auth: true, body: input }),
 

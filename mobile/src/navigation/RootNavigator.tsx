@@ -22,6 +22,7 @@ import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import FreezeAccountScreen from '../screens/FreezeAccountScreen';
 import SessionsScreen from '../screens/SessionsScreen';
 import CardsScreen from '../screens/CardsScreen';
+import PayoutAccountScreen from '../screens/PayoutAccountScreen';
 import ReportProblemScreen from '../screens/ReportProblemScreen';
 import DisputesScreen from '../screens/DisputesScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
@@ -44,12 +45,13 @@ export type RootStackParamList = {
   PayConfirm: { token: string };
   PayPin: { transactionId: string; amountKobo: number; payeeName: string };
   PayCheckout: { checkoutUrl: string; transactionId: string; amountKobo: number; payeeName: string };
-  PaySuccess: { amountKobo: number; payeeName: string };
+  PaySuccess: { transactionId?: string; amountKobo: number; payeeName: string };
   ChangePin: undefined;
   DeleteAccount: undefined;
   FreezeAccount: undefined;
   Sessions: undefined;
   Cards: undefined;
+  PayoutAccount: undefined;
   ReportProblem: { txn: Txn };
   Disputes: undefined;
   TransactionDetail: { txn: Txn };
@@ -94,6 +96,7 @@ export default function RootNavigator() {
           <Stack.Screen name="FreezeAccount" component={FreezeAccountScreen} />
           <Stack.Screen name="Sessions" component={SessionsScreen} />
           <Stack.Screen name="Cards" component={CardsScreen} />
+          <Stack.Screen name="PayoutAccount" component={PayoutAccountScreen} />
           <Stack.Screen name="ReportProblem" component={ReportProblemScreen} />
           <Stack.Screen name="Disputes" component={DisputesScreen} />
           <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />

@@ -69,6 +69,11 @@ export interface BankLookupResult {
   bankCode: string;
 }
 
+export interface Bank {
+  name: string;
+  code: string;
+}
+
 export interface TransferToBankInput {
   amountKobo: number;
   accountNumber: string;
@@ -109,6 +114,9 @@ export interface PaymentProvider {
   verifyCheckoutPayment(reference: string): Promise<CheckoutVerification>;
 
   lookupBankAccount(input: BankLookupInput): Promise<BankLookupResult>;
+
+  // List the banks (with provider-specific codes) available for payouts.
+  listBanks(): Promise<Bank[]>;
 
   // The P2P payout leg. A timeout here means UNKNOWN, not failed — callers
   // must requery before deciding to compensate.

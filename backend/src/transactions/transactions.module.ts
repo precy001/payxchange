@@ -11,6 +11,7 @@ import { PaymentRequestsModule } from '../payment-requests/payment-requests.modu
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PayoutDestinationsModule } from '../payout-destinations/payout-destinations.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     UsersModule, // UsersRepository
     AuthModule, // AuthService (PIN verification)
     NotificationsModule, // push alerts on completion
+    PayoutDestinationsModule, // payee's saved bank account
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService, TransactionsRepository, PayoutService, OutboxWorker, ExpirySweeper],

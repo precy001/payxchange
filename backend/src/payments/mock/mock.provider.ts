@@ -29,6 +29,10 @@ export class MockPaymentProvider implements PaymentProvider {
   canAutoCharge(): boolean {
     return true; // mock charges anything
   }
+
+  async listBanks() {
+    return [{ name: 'Mock Bank', code: '001' }];
+  }
   private readonly logger = new Logger(MockPaymentProvider.name);
 
   private outcome(): 'success' | 'fail' | 'timeout' | 'pending' {

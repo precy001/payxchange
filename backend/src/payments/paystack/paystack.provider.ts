@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
 import {
+  Bank,
   BankLookupInput,
   BankLookupResult,
   ChargeResult,
@@ -126,15 +127,36 @@ export class PaystackProvider implements PaymentProvider {
   }
 
   async lookupBankAccount(input: BankLookupInput): Promise<BankLookupResult> {
-    const res = await this.http.get(
-      `/bank/resolve?account_number=${encodeURIComponent(input.accountNumber)}&bank_code=${encodeURIComponent(input.bankCode)}`,
-    );
-    const data = res.data?.data;
-    return {
-      accountName: data?.account_name ?? '',
-      accountNumber: input.accountNumber,
-      bankCode: input.bankCode,
-    };
+    try {
+      const res = await this.http.get(
+        `/bank/resolve?account_number=${encodeURIComponent(input.accountNumber)}&bank_code=${encodeURIComponent(input.bankCode)}`,
+      );
+      const data = res.data?.data;
+      return {
+        accountName: data?.account_name ?? '',
+        accountNumber: input.accountNumber,
+        bankCode: input.bankCode,
+      };
+    } catch (err: any) {
+      // Resolve is part of the transfers product and may be gated on starter
+      // accounts. Don't fail the flow — return no name (unverified) and let the
+      // caller fall back to the user-entered name.
+      this.logger.warn(`[paystack] resolve failed: ${err?.response?.data?.message ?? err?.message}`);
+      return { accountName: '', accountNumber: input.accountNumber, bankCode: input.bankCode };
+    }
+  }
+
+  async listBanks(): Promise<Bank[]> {
+    try {
+      const res = await this.http.get('/bank?currency=NGN');
+      const list = res.data?.data ?? [];
+      return list
+        .filter((b: any) => b?.active !== false)
+        .map((b: any) => ({ name: b.name, code: b.code }));
+    } catch (err: any) {
+      this.logger.warn(`[paystack] list banks failed: ${err?.message}`);
+      return [];
+    }
   }
 
   // Payout: create a transfer recipient, then initiate the transfer.

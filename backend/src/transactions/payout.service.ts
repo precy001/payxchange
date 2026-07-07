@@ -6,6 +6,7 @@ import {
   TransferResult,
 } from '../payments/payment-provider.interface';
 import { UsersRepository } from '../users/users.repository';
+import { PayoutDestinationsRepository } from '../payout-destinations/payout-destinations.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionRow, TransactionsRepository } from './transactions.repository';
 
@@ -32,6 +33,7 @@ export class PayoutService {
     private readonly db: DatabaseService,
     private readonly txns: TransactionsRepository,
     private readonly users: UsersRepository,
+    private readonly payoutDestinations: PayoutDestinationsRepository,
     private readonly notifications: NotificationsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
@@ -97,14 +99,15 @@ export class PayoutService {
     });
 
     const payee = await this.users.findById(txn.payee_user_id);
-    // TODO(real-money): replace with the payee's saved payout destination once
-    // the "receive into your bank account" flow is built. For sandbox testing we
-    // send to Nomba's documented test account so the transfer actually succeeds.
+    // Pay into the payee's saved, verified bank account. (The Receive flow blocks
+    // generating a QR until they have one, so this should always exist.) The env
+    // values remain only as a last-resort fallback for older/test data.
+    const dest = await this.payoutDestinations.getDefault(txn.payee_user_id);
     const result = await this.provider.transferToBank({
       amountKobo: Number(txn.amount_kobo),
-      accountNumber: process.env.PAYOUT_TEST_ACCOUNT ?? '0000000000',
-      bankCode: process.env.PAYOUT_TEST_BANK_CODE ?? '000',
-      accountName: process.env.PAYOUT_TEST_ACCOUNT_NAME ?? payee?.full_name ?? 'PayXchange user',
+      accountNumber: dest?.account_number ?? process.env.PAYOUT_TEST_ACCOUNT ?? '0000000000',
+      bankCode: dest?.bank_code ?? process.env.PAYOUT_TEST_BANK_CODE ?? '000',
+      accountName: dest?.account_name ?? process.env.PAYOUT_TEST_ACCOUNT_NAME ?? payee?.full_name ?? 'PayXchange user',
       reference: payoutRef,
       narration: 'PayXchange payout',
     });

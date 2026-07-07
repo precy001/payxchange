@@ -7,6 +7,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +49,19 @@ export default function ReceiveAmountScreen() {
         expiresAt: res.expiresAt,
       });
     } catch (e) {
+      // Backend blocks receiving until a payout account exists.
+      if (e instanceof ApiError && e.message === 'ADD_PAYOUT_ACCOUNT') {
+        setLoading(false);
+        Alert.alert(
+          'Add a payout account',
+          'Before you can receive money, add the bank account it should be paid into.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Add account', onPress: () => navigation.navigate('PayoutAccount') },
+          ],
+        );
+        return;
+      }
       setError(e instanceof ApiError ? e.message : 'Could not create the code.');
     } finally {
       setLoading(false);

@@ -41,7 +41,7 @@ export default function PayCheckoutScreen() {
   const evaluate = (state: string): boolean => {
     if (PAID.includes(state)) {
       settled.current = true;
-      navigation.replace('PaySuccess', { amountKobo, payeeName });
+      navigation.replace('PaySuccess', { transactionId, amountKobo, payeeName });
       return true;
     }
     if (FAILED.includes(state)) {

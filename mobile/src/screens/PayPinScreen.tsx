@@ -49,7 +49,7 @@ export default function PayPinScreen() {
             payeeName,
           });
         } else {
-          navigation.replace('PaySuccess', { amountKobo, payeeName });
+          navigation.replace('PaySuccess', { transactionId, amountKobo, payeeName });
         }
       } catch (e) {
         const err = e as ApiError;

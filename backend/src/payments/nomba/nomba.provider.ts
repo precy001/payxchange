@@ -26,6 +26,10 @@ export class NombaProvider implements PaymentProvider {
   canAutoCharge(): boolean {
     return false; // Nomba path always uses hosted checkout
   }
+
+  async listBanks() {
+    return [{ name: 'GTBank', code: '058' }, { name: 'Access Bank', code: '044' }];
+  }
   private readonly logger = new Logger(NombaProvider.name);
 
   constructor(

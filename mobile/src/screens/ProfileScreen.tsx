@@ -158,6 +158,12 @@ export default function ProfileScreen() {
         />
         <View style={styles.divider} />
         <Row
+          icon="cash-outline"
+          label="Payout account"
+          onPress={() => navigation.navigate('PayoutAccount')}
+        />
+        <View style={styles.divider} />
+        <Row
           icon="card-outline"
           label="Payment methods"
           onPress={() => navigation.navigate('Cards')}

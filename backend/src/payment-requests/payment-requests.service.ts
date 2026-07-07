@@ -10,6 +10,7 @@ import Redis from 'ioredis';
 import { REDIS } from '../infra/redis.module';
 import { CreatePaymentRequestDto } from './dto/create-payment-request.dto';
 import { PaymentRequestsRepository } from './payment-requests.repository';
+import { PayoutDestinationsRepository } from '../payout-destinations/payout-destinations.repository';
 
 // How long a QR stays valid. Short on purpose: a checkout code shouldn't work
 // an hour later. Tune per use case (merchant vs p2p) when we add auth.
@@ -20,10 +21,18 @@ const FK_VIOLATION = '23503'; // Postgres foreign-key error (e.g., unknown payee
 export class PaymentRequestsService {
   constructor(
     private readonly repo: PaymentRequestsRepository,
+    private readonly payoutDestinations: PayoutDestinationsRepository,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   async create(payeeUserId: string, dto: CreatePaymentRequestDto) {
+    // You can't receive money without somewhere to send it. Require a saved
+    // payout account before generating a QR.
+    const dest = await this.payoutDestinations.getDefault(payeeUserId);
+    if (!dest) {
+      throw new BadRequestException('ADD_PAYOUT_ACCOUNT');
+    }
+
     const expiresAt = new Date(Date.now() + QR_TTL_SECONDS * 1000);
 
     let row;
