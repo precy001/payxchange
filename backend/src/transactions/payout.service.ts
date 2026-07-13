@@ -103,14 +103,34 @@ export class PayoutService {
     // generating a QR until they have one, so this should always exist.) The env
     // values remain only as a last-resort fallback for older/test data.
     const dest = await this.payoutDestinations.getDefault(txn.payee_user_id);
-    const result = await this.provider.transferToBank({
-      amountKobo: Number(txn.amount_kobo),
-      accountNumber: dest?.account_number ?? process.env.PAYOUT_TEST_ACCOUNT ?? '0000000000',
-      bankCode: dest?.bank_code ?? process.env.PAYOUT_TEST_BANK_CODE ?? '000',
-      accountName: dest?.account_name ?? process.env.PAYOUT_TEST_ACCOUNT_NAME ?? payee?.full_name ?? 'PayXchange user',
-      reference: payoutRef,
-      narration: 'PayXchange payout',
-    });
+
+    // PAYOUT_MODE=simulate lets you test the whole flow end-to-end (real card-in,
+    // real destination, real ledger + completion) while the actual bank transfer
+    // is stubbed to succeed — for when the provider can't send transfers yet
+    // (e.g. account not registered for payouts). Independent of PAYMENTS_DRIVER.
+    const simulate = (process.env.PAYOUT_MODE ?? 'real') === 'simulate';
+
+    const result = simulate
+      ? (() => {
+          this.logger.warn(
+            `[payout] SIMULATE — auto-succeeding ${payoutRef} to ${dest?.account_number ?? 'fallback'} (${dest?.bank_code ?? '—'})`,
+          );
+          return {
+            status: 'success' as const,
+            providerReference: `sim_${payoutRef}`,
+            sessionId: `sim_${Date.now()}`,
+            raw: { simulated: true },
+          };
+        })()
+      : await this.provider.transferToBank({
+          amountKobo: Number(txn.amount_kobo),
+          accountNumber: dest?.account_number ?? process.env.PAYOUT_TEST_ACCOUNT ?? '0000000000',
+          bankCode: dest?.bank_code ?? process.env.PAYOUT_TEST_BANK_CODE ?? '000',
+          accountName:
+            dest?.account_name ?? process.env.PAYOUT_TEST_ACCOUNT_NAME ?? payee?.full_name ?? 'PayXchange user',
+          reference: payoutRef,
+          narration: 'PayXchange payout',
+        });
 
     return this.applyResult(txn, attemptId, result);
   }
