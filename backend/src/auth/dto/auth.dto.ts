@@ -1,9 +1,16 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { normalizePhone } from '../../common/phone';
 
 const PHONE = /^\+?[1-9]\d{7,14}$/;
 const PIN = /^\d{4}$/;
 
+// Accepts 09162542339 / 9162542339 / 2349162542339 / +2349162542339 and stores
+// the one canonical form, so the same person always resolves to one account.
+const NormalizePhone = () => Transform(({ value }) => normalizePhone(value));
+
 export class RegisterDto {
+  @NormalizePhone()
   @IsString()
   @Matches(PHONE, {
     message: 'phone must be a valid international number, e.g. +2348012345678',
@@ -21,6 +28,7 @@ export class RegisterDto {
 }
 
 export class VerifyOtpDto {
+  @NormalizePhone()
   @IsString()
   @Matches(PHONE)
   phone!: string;
@@ -41,6 +49,7 @@ export class SetPinDto {
 }
 
 export class LoginDto {
+  @NormalizePhone()
   @IsString()
   @Matches(PHONE)
   phone!: string;
