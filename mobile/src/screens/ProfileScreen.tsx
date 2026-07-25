@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useAuth } from '../auth/AuthContext';
 import { api, ApiError } from '../lib/api';
+import { openStoreReview } from '../lib/review';
 import { useCachedResource } from '../lib/useCachedResource';
 import { cache } from '../lib/cache';
 import { font, radius, spacing } from '../theme';
@@ -155,6 +156,12 @@ export default function ProfileScreen() {
               thumbColor={colors.white}
             />
           }
+        />
+        <View style={styles.divider} />
+        <Row
+          icon="star-outline"
+          label="Rate PayXchange"
+          onPress={() => openStoreReview()}
         />
         <View style={styles.divider} />
         <Row

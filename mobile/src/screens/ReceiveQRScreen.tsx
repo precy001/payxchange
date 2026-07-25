@@ -15,7 +15,7 @@ export default function ReceiveQRScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { qrImage, amountKobo, description } = route.params ?? {};
+  const { qrImage, amountKobo, description, isStatic } = route.params ?? {};
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl }]}>
@@ -24,7 +24,9 @@ export default function ReceiveQRScreen() {
       </Pressable>
 
       <View style={styles.center}>
-        <Text style={styles.amount}>{formatNaira(amountKobo ?? 0)}</Text>
+        <Text style={styles.amount}>
+          {isStatic ? 'Any amount' : formatNaira(amountKobo ?? 0)}
+        </Text>
         <Text style={styles.desc}>{description}</Text>
 
         <View style={styles.qrCard}>
@@ -54,7 +56,11 @@ export default function ReceiveQRScreen() {
 
         <View style={styles.hintRow}>
           <Ionicons name="time-outline" size={16} color={colors.muted} />
-          <Text style={styles.hint}>Expires in 10 minutes · single use</Text>
+          <Text style={styles.hint}>
+            {isStatic
+              ? 'Reusable · never expires · payer enters the amount'
+              : 'Expires in 10 minutes · single use'}
+          </Text>
         </View>
         <Text style={styles.scanMe}>Ask the payer to scan this with PayXchange</Text>
       </View>

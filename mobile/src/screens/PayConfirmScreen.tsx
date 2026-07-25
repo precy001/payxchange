@@ -1,10 +1,10 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { api, ApiError } from '../lib/api';
-import { formatNaira } from '../lib/money';
+import { formatNaira, nairaToKobo } from '../lib/money';
 import { computeFeeKobo } from '../lib/fees';
 import Button from '../components/Button';
 import Skeleton from '../components/Skeleton';
@@ -50,18 +50,32 @@ export default function PayConfirmScreen() {
   };
 
   const [useNewCard, setUseNewCard] = useState(false);
+  // For a STATIC code the payee fixed no amount — the payer types one.
+  const [payAmount, setPayAmount] = useState('');
+
+  const isStatic = !!details?.isStatic;
+  const typedKobo = nairaToKobo(payAmount);
+  // The amount actually being paid: the payee's fixed amount, or what the payer
+  // typed on a static code.
+  const effectiveKobo: number | null = isStatic ? typedKobo : (details?.amountKobo ?? null);
+  const amountReady = effectiveKobo !== null && effectiveKobo > 0;
 
   const onPay = async () => {
+    if (!amountReady) return;
     setPaying(true);
     setError(null);
     try {
       // Pay with the saved card (silent auto-charge) unless the payer chose a new
       // one, or has none — in which case we omit it and checkout captures a card.
       const fundingSourceId = !useNewCard && card ? card.id : undefined;
-      const txn = await api.initiateTransaction({ token, fundingSourceId });
+      const txn = await api.initiateTransaction({
+        token,
+        fundingSourceId,
+        amountKobo: isStatic ? effectiveKobo! : undefined,
+      });
       navigation.replace('PayPin', {
         transactionId: txn.id,
-        amountKobo: details.amountKobo,
+        amountKobo: effectiveKobo!,
         payeeName: details.payeeName,
       });
     } catch (e) {
@@ -94,7 +108,22 @@ export default function PayConfirmScreen() {
           <View style={styles.center}>
             <Text style={styles.payingTo}>You're paying</Text>
             <Text style={styles.payee}>{details.payeeName ?? 'PayXchange user'}</Text>
-            <Text style={styles.amount}>{formatNaira(details.amountKobo)}</Text>
+            {isStatic ? (
+              <View style={styles.amountEntry}>
+                <Text style={styles.naira}>₦</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={payAmount}
+                  onChangeText={(t: string) => setPayAmount(t.replace(/[^0-9.]/g, ''))}
+                  placeholder="0"
+                  placeholderTextColor={colors.line}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                />
+              </View>
+            ) : (
+              <Text style={styles.amount}>{formatNaira(details.amountKobo)}</Text>
+            )}
             <View style={styles.descPill}>
               <Text style={styles.descText}>{details.description}</Text>
             </View>
@@ -102,16 +131,16 @@ export default function PayConfirmScreen() {
             <View style={styles.breakdown}>
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>Amount</Text>
-                <Text style={styles.breakdownValue}>{formatNaira(details.amountKobo)}</Text>
+                <Text style={styles.breakdownValue}>{formatNaira(effectiveKobo ?? 0)}</Text>
               </View>
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>PayXchange fee</Text>
-                <Text style={styles.breakdownValue}>{formatNaira(computeFeeKobo(details.amountKobo))}</Text>
+                <Text style={styles.breakdownValue}>{formatNaira(computeFeeKobo(effectiveKobo ?? 0))}</Text>
               </View>
               <View style={[styles.breakdownRow, styles.breakdownTotal]}>
                 <Text style={styles.totalLabel}>Total</Text>
                 <Text style={styles.totalValue}>
-                  {formatNaira(details.amountKobo + computeFeeKobo(details.amountKobo))}
+                  {formatNaira((effectiveKobo ?? 0) + computeFeeKobo(effectiveKobo ?? 0))}
                 </Text>
               </View>
             </View>
@@ -138,9 +167,14 @@ export default function PayConfirmScreen() {
           </View>
 
           <Button
-            title={`Pay ${formatNaira(details.amountKobo + computeFeeKobo(details.amountKobo))}`}
+            title={
+              amountReady
+                ? `Pay ${formatNaira(effectiveKobo! + computeFeeKobo(effectiveKobo!))}`
+                : 'Enter an amount'
+            }
             onPress={onPay}
             loading={paying}
+            disabled={!amountReady}
           />
         </>
       )}
@@ -157,6 +191,9 @@ const makeStyles = (colors: Palette) =>
   payingTo: { fontFamily: font.regular, fontSize: 15, color: colors.muted },
   payee: { fontFamily: font.bold, fontSize: 20, color: colors.ink, marginTop: spacing.xs, marginBottom: spacing.xl },
   amount: { fontFamily: font.extrabold, fontSize: 48, color: colors.ink, letterSpacing: -1 },
+  amountEntry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  naira: { fontFamily: font.extrabold, fontSize: 40, color: colors.inkSoft, marginRight: 4 },
+  amountInput: { fontFamily: font.extrabold, fontSize: 48, color: colors.ink, letterSpacing: -1, minWidth: 120, textAlign: 'center', padding: 0 },
   breakdown: { alignSelf: 'stretch', marginTop: spacing.xl, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md },
   breakdownLabel: { fontFamily: font.regular, fontSize: 15, color: colors.muted },

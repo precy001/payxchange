@@ -1,14 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { font, gradients } from '../theme';
 
-const SIZE = 60;
+// The wordmark must fit the narrowest phone as well as a tablet, so the type
+// scales with the viewport instead of being a fixed 60pt (which overflowed on
+// small screens). "PayXchange" is ~10 glyphs, so cap the size to the width.
+const BASE_SIZE = 60;
+const MIN_SIZE = 30;
+
+function useLogoSize() {
+  const { width } = useWindowDimensions();
+  // Leave a comfortable margin, then derive a size the wordmark can't exceed.
+  const usable = width - 48;
+  const perGlyph = 0.56; // extrabold glyph width as a fraction of font size
+  const fitted = usable / (10 * perGlyph);
+  return Math.max(MIN_SIZE, Math.min(BASE_SIZE, fitted));
+}
 
 // One-shot intro: "PX" pops in, then "ay" unfurls from the P and "change"
 // unfurls from the X to spell PayXchange, then the partner line fades up.
 export default function SplashIntro({ onFinish }: { onFinish: () => void }) {
+  const SIZE = useLogoSize();
   // Native-driver values (transform / opacity)
   const root = useRef(new Animated.Value(1)).current;
   const pxScale = useRef(new Animated.Value(0.7)).current;
@@ -71,10 +85,10 @@ export default function SplashIntro({ onFinish }: { onFinish: () => void }) {
       />
 
       {/* Hidden measuring copies to get natural widths */}
-      <Text style={[styles.letter, styles.measure]} onLayout={(e) => setAyWidth(e.nativeEvent.layout.width)}>
+      <Text style={[styles.letter, styles.measure, { fontSize: SIZE, lineHeight: SIZE * 1.22 }]} onLayout={(e) => setAyWidth(e.nativeEvent.layout.width)}>
         ay
       </Text>
-      <Text style={[styles.letter, styles.measure]} onLayout={(e) => setChangeWidth(e.nativeEvent.layout.width)}>
+      <Text style={[styles.letter, styles.measure, { fontSize: SIZE, lineHeight: SIZE * 1.22 }]} onLayout={(e) => setChangeWidth(e.nativeEvent.layout.width)}>
         change
       </Text>
 
@@ -84,7 +98,7 @@ export default function SplashIntro({ onFinish }: { onFinish: () => void }) {
             P
           </Animated.Text>
           <Animated.View style={[styles.clip, { width: ayW }]}>
-            <Text style={[styles.letter, { width: ayWidth }]} numberOfLines={1}>
+            <Text style={[styles.letter, { width: ayWidth, fontSize: SIZE, lineHeight: SIZE * 1.22 }]} numberOfLines={1}>
               ay
             </Text>
           </Animated.View>
@@ -92,7 +106,7 @@ export default function SplashIntro({ onFinish }: { onFinish: () => void }) {
             X
           </Animated.Text>
           <Animated.View style={[styles.clip, { width: changeW }]}>
-            <Text style={[styles.letter, { width: changeWidth }]} numberOfLines={1}>
+            <Text style={[styles.letter, { width: changeWidth, fontSize: SIZE, lineHeight: SIZE * 1.22 }]} numberOfLines={1}>
               change
             </Text>
           </Animated.View>
@@ -121,8 +135,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-end' },
   letter: {
     fontFamily: font.extrabold,
-    fontSize: SIZE,
-    lineHeight: SIZE * 1.22,
+    fontSize: BASE_SIZE, // overridden inline with the responsive size
+    lineHeight: BASE_SIZE * 1.22, // overridden inline with the responsive size
     color: '#FFFFFF',
     letterSpacing: -1.5,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),

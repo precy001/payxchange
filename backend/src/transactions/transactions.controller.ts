@@ -15,6 +15,7 @@ export class TransactionsController {
       token: dto.token,
       payerUserId: userId,
       fundingSourceId: dto.fundingSourceId,
+      amountKobo: dto.amountKobo,
     });
   }
 

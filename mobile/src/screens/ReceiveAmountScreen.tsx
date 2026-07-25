@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -26,11 +27,50 @@ export default function ReceiveAmountScreen() {
 
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [staticLoading, setStaticLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const kobo = nairaToKobo(amount);
-  const canSubmit = kobo !== null && description.trim().length > 0 && !loading;
+  // Description is optional — it shouldn't block someone receiving money.
+  const canSubmit = kobo !== null && !loading;
+
+  // A STATIC code carries no amount: the payer scans and types what they want to
+  // pay. It's reusable and doesn't expire — print it, stick it on the counter.
+  const onGenerateStatic = async () => {
+    setError(null);
+    setStaticLoading(true);
+    try {
+      const res = await api.createPaymentRequest({
+        type: 'p2p',
+        isStatic: true,
+        description: description.trim() || undefined,
+      });
+      navigation.navigate('ReceiveQR', {
+        qrImage: res.qrImage,
+        amountKobo: res.amountKobo, // null
+        description: res.description,
+        expiresAt: res.expiresAt,
+        isStatic: true,
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.message === 'ADD_PAYOUT_ACCOUNT') {
+        setStaticLoading(false);
+        Alert.alert(
+          'Add a payout account',
+          'Before you can receive money, add the bank account it should be paid into.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Add account', onPress: () => navigation.navigate('PayoutAccount') },
+          ],
+        );
+        return;
+      }
+      setError(e instanceof ApiError ? e.message : 'Could not create the code.');
+    } finally {
+      setStaticLoading(false);
+    }
+  };
 
   const onGenerate = async () => {
     if (!canSubmit || kobo === null) return;
@@ -40,13 +80,14 @@ export default function ReceiveAmountScreen() {
       const res = await api.createPaymentRequest({
         type: 'p2p',
         amountKobo: kobo,
-        description: description.trim(),
+        description: description.trim() || undefined,
       });
       navigation.navigate('ReceiveQR', {
         qrImage: res.qrImage,
         amountKobo: res.amountKobo,
         description: res.description,
         expiresAt: res.expiresAt,
+        isStatic: false,
       });
     } catch (e) {
       // Backend blocks receiving until a payout account exists.
@@ -94,7 +135,7 @@ export default function ReceiveAmountScreen() {
           />
         </View>
 
-        <Text style={styles.label}>What's it for?</Text>
+        <Text style={styles.label}>What's it for? (optional)</Text>
         <TextInput
           style={styles.input}
           value={description}
@@ -109,6 +150,20 @@ export default function ReceiveAmountScreen() {
         <View style={styles.spacer} />
 
         <Button title="Generate QR code" onPress={onGenerate} loading={loading} disabled={!canSubmit} />
+
+        <Pressable style={styles.staticBtn} onPress={onGenerateStatic} disabled={staticLoading}>
+          {staticLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <>
+              <Ionicons name="infinite-outline" size={18} color={colors.primary} />
+              <Text style={styles.staticText}>Generate a static QR (any amount)</Text>
+            </>
+          )}
+        </Pressable>
+        <Text style={styles.staticHint}>
+          A reusable code with no fixed amount — the payer chooses what to pay. Doesn't expire.
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -153,6 +208,9 @@ const makeStyles = (colors: Palette) =>
   },
   error: { color: colors.danger, fontFamily: font.medium, fontSize: 13, marginTop: spacing.md },
 
+  staticBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, height: 50, marginTop: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'transparent' },
+  staticText: { fontFamily: font.semibold, fontSize: 14, color: colors.primary },
+  staticHint: { fontFamily: font.regular, fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: spacing.sm, lineHeight: 17 },
   spacer: { flex: 1 },
   button: {
     height: 56,

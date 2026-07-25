@@ -53,12 +53,20 @@ export default function PayPinScreen() {
         }
       } catch (e) {
         const err = e as ApiError;
-        if (err.status === 423) {
-          setError('Account locked. Try again later.');
+        // Never blame the PIN for a network/server problem — only a 401 from our
+        // API actually means the PIN was wrong.
+        if (err.isNetwork) {
+          setError(err.message); // "No connection…" / "timed out…"
+        } else if (err.status === 423) {
+          setError('Too many wrong attempts. Your account is locked — try again later.');
         } else if (err.status === 401) {
           setError('Incorrect PIN. Try again.');
+        } else if (err.status === 402) {
+          setError(err.message || 'Your card was declined.');
+        } else if (err.status >= 500) {
+          setError('PayXchange is having trouble right now. Please try again in a moment.');
         } else {
-          setError(err.message || 'Payment failed.');
+          setError(err.message || 'Payment could not be completed.');
         }
         setPin('');
         setLoading(false);

@@ -28,13 +28,35 @@ export async function clearTokens() {
   await SecureStore.deleteItemAsync(PHONE_KEY);
 }
 
+// status 0 = the request never reached the server (offline / DNS / server down).
+// isNetwork lets screens say "check your connection" instead of guessing that a
+// failure means "wrong PIN".
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public isNetwork = false,
+    public isTimeout = false,
+  ) {
     super(message);
   }
 }
 
+const REQUEST_TIMEOUT_MS = 20000;
+
 type RequestOptions = { method?: string; body?: unknown; auth?: boolean };
+
+// Accurate fallback wording per status, so we never blame the user for a
+// server/network problem.
+function serverMessage(status: number): string {
+  if (status >= 500) return 'PayXchange is having trouble right now. Please try again in a moment.';
+  if (status === 408 || status === 504) return 'The server took too long to respond. Please try again.';
+  if (status === 429) return 'Too many attempts. Please wait a moment and try again.';
+  if (status === 401) return 'Your session has expired. Please log in again.';
+  if (status === 403) return "You don't have permission to do that.";
+  if (status === 404) return 'We couldn’t find what you were looking for.';
+  return 'Something went wrong. Please try again.';
+}
 
 async function request<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -55,23 +77,45 @@ async function request<T = any>(path: string, options: RequestOptions = {}): Pro
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Abort a request that hangs, so a dead network fails fast and clearly instead
+  // of leaving the user staring at a spinner.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
-    throw new ApiError(0, "Can't reach the server. Is the backend running, and are you on the same WiFi?");
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e?.name === 'AbortError') {
+      throw new ApiError(0, 'The connection timed out. Check your internet and try again.', true, true);
+    }
+    throw new ApiError(0, 'No connection to PayXchange. Check your internet and try again.', true);
+  } finally {
+    clearTimeout(timer);
   }
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    // Not JSON (e.g. an HTML error/proxy page) — don't crash on it.
+    if (!res.ok) throw new ApiError(res.status, serverMessage(res.status));
+    return null as T;
+  }
 
   if (!res.ok) {
-    const msg = data?.message ?? 'Something went wrong';
-    throw new ApiError(res.status, Array.isArray(msg) ? msg.join(', ') : msg);
+    const raw = data?.message;
+    const msg = Array.isArray(raw) ? raw.join(', ') : raw;
+    // Trust a specific message from our API; otherwise say something accurate
+    // for the status rather than a misleading generic.
+    throw new ApiError(res.status, msg || serverMessage(res.status));
   }
   return data as T;
 }
@@ -105,13 +149,17 @@ export const api = {
   removePayoutDestination: (id: string) =>
     request(`/payout-destinations/${id}`, { method: 'DELETE', auth: true }),
 
-  createPaymentRequest: (input: { type: 'p2p' | 'merchant'; amountKobo: number; description: string }) =>
-    request('/payment-requests', { method: 'POST', auth: true, body: input }),
+  createPaymentRequest: (input: {
+    type: 'p2p' | 'merchant';
+    amountKobo?: number; // omit for a static (any-amount) code
+    description?: string; // optional
+    isStatic?: boolean;
+  }) => request('/payment-requests', { method: 'POST', auth: true, body: input }),
 
   resolvePaymentRequest: (token: string) =>
     request(`/payment-requests/resolve/${encodeURIComponent(token)}`, { auth: true }),
 
-  initiateTransaction: (input: { token: string; fundingSourceId?: string }) =>
+  initiateTransaction: (input: { token: string; fundingSourceId?: string; amountKobo?: number }) =>
     request('/transactions/initiate', { method: 'POST', auth: true, body: input }),
 
   confirmTransaction: (id: string, pin: string) =>

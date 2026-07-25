@@ -40,7 +40,7 @@ export type RootStackParamList = {
   Activity: undefined;
   Profile: undefined;
   ReceiveAmount: undefined;
-  ReceiveQR: { qrImage: string; amountKobo: number; description: string; expiresAt: string };
+  ReceiveQR: { qrImage: string; amountKobo: number | null; description?: string | null; expiresAt: string; isStatic?: boolean };
   Scan: undefined;
   PayConfirm: { token: string };
   PayPin: { transactionId: string; amountKobo: number; payeeName: string };

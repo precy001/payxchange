@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
+import { normalizePhone, isValidPhone } from '../lib/phone';
 import { ApiError } from '../lib/api';
 import Button from '../components/Button';
 import { font, radius, spacing } from '../theme';
@@ -31,14 +32,14 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = phone.trim().length >= 8 && pin.length === 4 && !loading;
+  const canSubmit = isValidPhone(phone) && pin.length === 4 && !loading;
 
   const onSubmit = async () => {
     if (!canSubmit) return;
     setError(null);
     setLoading(true);
     try {
-      await login(phone.trim(), pin);
+      await login(normalizePhone(phone), pin);
       // On success the navigator swaps to Home automatically.
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Login failed. Please try again.';
@@ -70,7 +71,7 @@ export default function LoginScreen() {
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
-            placeholder="+2348012345678"
+            placeholder="0801 234 5678"
             placeholderTextColor={colors.muted}
             keyboardType="phone-pad"
             autoCapitalize="none"

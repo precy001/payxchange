@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '../lib/api';
+import { maybeAskForReview } from '../lib/review';
 import { formatNaira } from '../lib/money';
 import Button from '../components/Button';
 import { colors, font, radius, spacing } from '../theme';
@@ -32,6 +33,8 @@ export default function PaySuccessScreen() {
         if (DONE.includes(txn.state)) {
           settled.current = true;
           setStatus('success');
+          // Ask for a store review only after a genuinely successful payment.
+          maybeAskForReview();
         } else if (FAILED.includes(txn.state)) {
           settled.current = true;
           setStatus('failed');

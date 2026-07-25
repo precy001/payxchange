@@ -6,11 +6,12 @@ export interface PaymentRequestRow {
   id: string;
   payee_user_id: string;
   type: string;
-  amount_kobo: string;
+  amount_kobo: string | null;
   currency: string;
-  description: string;
+  description: string | null;
   expires_at: string;
   consumed_at: string | null;
+  is_static: boolean;
   created_at: string;
 }
 
@@ -25,16 +26,17 @@ export class PaymentRequestsRepository {
   async create(input: {
     payeeUserId: string;
     type: string;
-    amountKobo: number;
-    description: string;
+    amountKobo: number | null; // NULL for a static (any-amount) code
+    description: string | null;
     expiresAt: Date;
+    isStatic: boolean;
   }): Promise<PaymentRequestRow> {
     const res = await this.db.query<PaymentRequestRow>(
-      `INSERT INTO payment_requests (payee_user_id, type, amount_kobo, description, expires_at)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO payment_requests (payee_user_id, type, amount_kobo, description, expires_at, is_static)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, payee_user_id, type, amount_kobo, currency, description,
-                 expires_at, consumed_at, created_at`,
-      [input.payeeUserId, input.type, input.amountKobo, input.description, input.expiresAt],
+                 expires_at, consumed_at, is_static, created_at`,
+      [input.payeeUserId, input.type, input.amountKobo, input.description, input.expiresAt, input.isStatic],
     );
     return res.rows[0];
   }
@@ -42,7 +44,7 @@ export class PaymentRequestsRepository {
   async findDetailById(id: string): Promise<PaymentRequestDetail | null> {
     const res = await this.db.query<PaymentRequestDetail>(
       `SELECT pr.id, pr.payee_user_id, pr.type, pr.amount_kobo, pr.currency,
-              pr.description, pr.expires_at, pr.consumed_at, pr.created_at,
+              pr.description, pr.expires_at, pr.consumed_at, pr.is_static, pr.created_at,
               u.full_name AS payee_name
          FROM payment_requests pr
          JOIN users u ON u.id = pr.payee_user_id
@@ -57,7 +59,7 @@ export class PaymentRequestsRepository {
   async lockForConsume(client: PoolClient, id: string): Promise<PaymentRequestRow | null> {
     const res = await client.query<PaymentRequestRow>(
       `SELECT id, payee_user_id, type, amount_kobo, currency, description,
-              expires_at, consumed_at, created_at
+              expires_at, consumed_at, is_static, created_at
          FROM payment_requests
         WHERE id = $1
         FOR UPDATE`,

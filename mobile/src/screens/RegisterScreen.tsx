@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { api, ApiError } from '../lib/api';
+import { normalizePhone, isValidPhone } from '../lib/phone';
 import Button from '../components/Button';
 import { font, radius, spacing } from '../theme';
 import { useTheme, Palette } from '../theme/ThemeContext';
@@ -29,7 +30,8 @@ export default function RegisterScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const phoneOk = /^\+?[1-9]\d{7,14}$/.test(phone.trim());
+  // Accepts 09162542339 / 9162542339 / +2349162542339 alike.
+  const phoneOk = isValidPhone(phone);
   const canSubmit = fullName.trim().length >= 2 && phoneOk && !loading;
 
   const onSubmit = async () => {
@@ -38,11 +40,11 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await api.register({
-        phone: phone.trim(),
+        phone: normalizePhone(phone),
         fullName: fullName.trim(),
         email: email.trim() || undefined,
       });
-      navigation.navigate('Otp', { phone: phone.trim() });
+      navigation.navigate('Otp', { phone: normalizePhone(phone) });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Sign up failed. Please try again.');
     } finally {
@@ -79,7 +81,7 @@ export default function RegisterScreen() {
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
-            placeholder="+2348012345678"
+            placeholder="0801 234 5678"
             placeholderTextColor={colors.muted}
             keyboardType="phone-pad"
             autoCapitalize="none"

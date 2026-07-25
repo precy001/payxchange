@@ -14,7 +14,10 @@ import { PayoutDestinationsRepository } from '../payout-destinations/payout-dest
 
 // How long a QR stays valid. Short on purpose: a checkout code shouldn't work
 // an hour later. Tune per use case (merchant vs p2p) when we add auth.
-const QR_TTL_SECONDS = 600; // 10 minutes
+const QR_TTL_SECONDS = 600; // 10 minutes (dynamic codes: short on purpose)
+// A static code is the payee's permanent "pay me" code (printed, on a counter).
+// It carries no amount, is reusable, and shouldn't expire in any practical sense.
+const STATIC_TTL_SECONDS = 60 * 60 * 24 * 365 * 5; // 5 years
 const FK_VIOLATION = '23503'; // Postgres foreign-key error (e.g., unknown payee)
 
 @Injectable()
@@ -33,16 +36,24 @@ export class PaymentRequestsService {
       throw new BadRequestException('ADD_PAYOUT_ACCOUNT');
     }
 
-    const expiresAt = new Date(Date.now() + QR_TTL_SECONDS * 1000);
+    const isStatic = dto.isStatic === true;
+    // A dynamic code must name its amount; a static one must NOT (the payer picks).
+    if (!isStatic && (dto.amountKobo == null || dto.amountKobo <= 0)) {
+      throw new BadRequestException('amountKobo is required for a dynamic code');
+    }
+
+    const ttl = isStatic ? STATIC_TTL_SECONDS : QR_TTL_SECONDS;
+    const expiresAt = new Date(Date.now() + ttl * 1000);
 
     let row;
     try {
       row = await this.repo.create({
         payeeUserId,
         type: dto.type,
-        amountKobo: dto.amountKobo,
-        description: dto.description,
+        amountKobo: isStatic ? null : dto.amountKobo!,
+        description: dto.description?.trim() || null,
         expiresAt,
+        isStatic,
       });
     } catch (err: any) {
       if (err?.code === FK_VIOLATION) {
@@ -55,7 +66,7 @@ export class PaymentRequestsService {
     // cannot be guessed. Redis maps it to the request id with a TTL, which is
     // what makes the code single-use-window and auto-expiring.
     const token = crypto.randomBytes(24).toString('base64url');
-    await this.redis.set(`qr:${token}`, row.id, 'EX', QR_TTL_SECONDS);
+    await this.redis.set(`qr:${token}`, row.id, 'EX', ttl);
 
     // What a scanner reads. The mobile app will register this URL scheme; for
     // now you can treat the token itself as the scannable payload.
@@ -75,7 +86,8 @@ export class PaymentRequestsService {
       token,
       qr: deepLink,
       qrImage, // a data:image/png URL — paste it into a browser to see the code
-      amountKobo: Number(row.amount_kobo),
+      isStatic,
+      amountKobo: row.amount_kobo == null ? null : Number(row.amount_kobo),
       currency: row.currency,
       description: row.description,
       expiresAt: row.expires_at,
@@ -95,7 +107,8 @@ export class PaymentRequestsService {
     if (!detail) {
       throw new GoneException('This code is no longer valid');
     }
-    if (detail.consumed_at) {
+    // A static code is reusable by design, so it's never "already used".
+    if (!detail.is_static && detail.consumed_at) {
       throw new GoneException('This code has already been used');
     }
 
@@ -103,7 +116,9 @@ export class PaymentRequestsService {
       paymentRequestId: detail.id,
       payeeName: detail.payee_name,
       type: detail.type,
-      amountKobo: Number(detail.amount_kobo),
+      isStatic: detail.is_static,
+      // NULL for a static code — the payer enters the amount.
+      amountKobo: detail.amount_kobo == null ? null : Number(detail.amount_kobo),
       currency: detail.currency,
       description: detail.description,
       expiresAt: detail.expires_at,

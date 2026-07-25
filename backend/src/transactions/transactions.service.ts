@@ -41,7 +41,12 @@ export class TransactionsService {
   ) {}
 
   // ---- INITIATE: payer scans -> PENDING transaction -------------------------
-  async initiate(input: { token: string; payerUserId: string; fundingSourceId?: string }) {
+  async initiate(input: {
+    token: string;
+    payerUserId: string;
+    fundingSourceId?: string;
+    amountKobo?: number; // supplied by the payer when the code is STATIC
+  }) {
     // A frozen account cannot move money.
     const payer = await this.users.findById(input.payerUserId);
     if (payer?.frozen_at) {
@@ -69,11 +74,15 @@ export class TransactionsService {
       fsId = fs.id;
     }
 
+    let wasStatic = false;
     const txn = await this.db.withTransaction(async (client) => {
       // Authoritative single-use guard: lock the request row, then consume it.
       const pr = await this.requests.lockForConsume(client, requestId);
       if (!pr) throw new GoneException('This code is no longer valid');
-      if (pr.consumed_at) throw new GoneException('This code has already been used');
+      // A STATIC code is reusable — it is never consumed and never "used up".
+      if (!pr.is_static && pr.consumed_at) {
+        throw new GoneException('This code has already been used');
+      }
       if (new Date(pr.expires_at).getTime() < Date.now()) {
         throw new GoneException('This code has expired');
       }
@@ -81,7 +90,26 @@ export class TransactionsService {
         throw new BadRequestException('You cannot pay yourself');
       }
 
-      await this.requests.markConsumed(client, requestId);
+      // Resolve the amount: a dynamic code fixes it; a static code lets the payer
+      // choose. NEVER let a payer override the amount on a dynamic code.
+      let amountKobo: number;
+      if (pr.is_static) {
+        if (input.amountKobo == null || !Number.isInteger(input.amountKobo) || input.amountKobo <= 0) {
+          throw new BadRequestException('Enter the amount you want to pay');
+        }
+        if (input.amountKobo > 1_000_000_000) {
+          throw new BadRequestException('That amount is too large');
+        }
+        amountKobo = input.amountKobo;
+      } else {
+        amountKobo = Number(pr.amount_kobo);
+      }
+
+      // Only a one-shot (dynamic) code gets consumed.
+      wasStatic = pr.is_static;
+      if (!pr.is_static) {
+        await this.requests.markConsumed(client, requestId);
+      }
 
       // collection_ref is our idempotency anchor at the provider: charging the
       // same ref twice is a no-op there, so even a duplicated confirm is safe.
@@ -93,15 +121,18 @@ export class TransactionsService {
         payeeUserId: pr.payee_user_id,
         fundingSourceId: fsId,
         type: pr.type,
-        amountKobo: pr.amount_kobo,
-        feeKobo: String(computeFeeKobo(Number(pr.amount_kobo))),
+        amountKobo: String(amountKobo),
+        feeKobo: String(computeFeeKobo(amountKobo)),
         currency: pr.currency,
         collectionRef,
       });
     });
 
-    // Best-effort cleanup; the DB consume above is the real guard.
-    await this.redis.del(`qr:${input.token}`).catch(() => undefined);
+    // Best-effort cleanup; the DB consume above is the real guard. A static code
+    // is reusable, so its token must survive.
+    if (!wasStatic) {
+      await this.redis.del(`qr:${input.token}`).catch(() => undefined);
+    }
 
     return this.toPublic(txn);
   }
