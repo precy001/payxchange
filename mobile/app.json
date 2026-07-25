@@ -33,6 +33,17 @@
       "image": "./assets/splash-icon.png",
       "backgroundColor": "#0A0E20",
       "resizeMode": "contain"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "218ae764-a594-4eac-835b-99d68718b0a4"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/218ae764-a594-4eac-835b-99d68718b0a4"
     }
   }
 }
