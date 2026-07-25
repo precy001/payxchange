@@ -39,12 +39,12 @@ export default function RegisterScreen() {
     setError(null);
     setLoading(true);
     try {
-      await api.register({
+      const res = await api.register({
         phone: normalizePhone(phone),
         fullName: fullName.trim(),
         email: email.trim() || undefined,
       });
-      navigation.navigate('Otp', { phone: normalizePhone(phone) });
+      navigation.navigate('Otp', { phone: normalizePhone(phone), devCode: res?.devCode });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Sign up failed. Please try again.');
     } finally {

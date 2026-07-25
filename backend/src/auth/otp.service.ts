@@ -28,12 +28,13 @@ export class OtpService {
     return crypto.createHash('sha256').update(`${phone}:${code}`).digest('hex');
   }
 
-  async sendCode(phone: string): Promise<void> {
+  async sendCode(phone: string): Promise<string> {
     // crypto.randomInt is unbiased — better than Math.random for security codes.
     const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
     const payload = JSON.stringify({ hash: this.hash(phone, code), attempts: 0 });
     await this.redis.set(this.key(phone), payload, 'EX', OTP_TTL_SECONDS);
     await this.deliver(phone, code);
+    return code;
   }
 
   // MOCK delivery. Replace the body with a real SMS provider call later;

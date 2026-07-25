@@ -44,19 +44,26 @@ export class AuthService {
         email: dto.email,
         fullName: dto.fullName,
       });
-      await this.otp.sendCode(dto.phone);
-      return { message: 'Verification code sent', userId: user.id };
+      const code = await this.otp.sendCode(dto.phone);
+      return { message: 'Verification code sent', userId: user.id, ...this.devCode(code) };
     } catch (err) {
       if (err instanceof ConflictException) {
         const existing = await this.usersRepo.findByPhone(dto.phone);
         if (existing && !existing.phone_verified) {
-          await this.otp.sendCode(dto.phone);
-          return { message: 'Verification code sent', userId: existing.id };
+          const code = await this.otp.sendCode(dto.phone);
+          return { message: 'Verification code sent', userId: existing.id, ...this.devCode(code) };
         }
         throw new ConflictException('Account already exists — please log in');
       }
       throw err;
     }
+  }
+
+  // In beta (non-production) we hand the OTP straight back so testers can register
+  // without real SMS. In production this returns nothing and the code only goes
+  // out by SMS — so it can never leak to real users.
+  private devCode(code: string): { devCode?: string } {
+    return process.env.NODE_ENV === 'production' ? {} : { devCode: code };
   }
 
   async verifyOtp(dto: VerifyOtpDto) {

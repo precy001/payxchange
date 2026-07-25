@@ -14,6 +14,7 @@ export default function OtpScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const phone: string = route.params?.phone;
+  const [devCode, setDevCode] = useState<string | undefined>(route.params?.devCode);
 
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState('');
@@ -38,9 +39,16 @@ export default function OtpScreen() {
     if (code.length === 6 && !loading) verify(code);
   }, [code]);
 
+  // Beta convenience: if the backend handed us the code (no real SMS yet),
+  // drop it into the field so testers don't have to hunt for it.
+  useEffect(() => {
+    if (devCode && devCode.length === 6) setCode(devCode);
+  }, [devCode]);
+
   const resend = async () => {
     try {
-      await api.register({ phone });
+      const res = await api.register({ phone });
+      if (res?.devCode) setDevCode(res.devCode);
       setResent(true);
       setTimeout(() => setResent(false), 3000);
     } catch {
@@ -56,8 +64,15 @@ export default function OtpScreen() {
 
       <Text style={styles.title}>Enter the code</Text>
       <Text style={styles.subtitle}>
-        We sent a 6-digit code to {phone}. (In development, read it from your server terminal.)
+        We sent a 6-digit code to {phone}.
       </Text>
+
+      {devCode ? (
+        <View style={styles.betaBanner}>
+          <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+          <Text style={styles.betaText}>Beta — your code is <Text style={styles.betaCode}>{devCode}</Text></Text>
+        </View>
+      ) : null}
 
       <Pressable style={styles.cells} onPress={() => inputRef.current?.focus()}>
         {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -98,6 +113,9 @@ const makeStyles = (colors: Palette) =>
   back: { width: 40, height: 40, justifyContent: 'center', marginBottom: spacing.sm },
   title: { fontFamily: font.extrabold, fontSize: 28, color: colors.ink, letterSpacing: -0.4 },
   subtitle: { fontFamily: font.regular, fontSize: 15, color: colors.muted, marginTop: spacing.xs, lineHeight: 22 },
+  betaBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg, alignSelf: 'flex-start', backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  betaText: { fontFamily: font.medium, fontSize: 14, color: colors.ink },
+  betaCode: { fontFamily: font.bold, color: colors.primary, letterSpacing: 2 },
 
   cells: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xxxl, justifyContent: 'space-between' },
   cell: {
