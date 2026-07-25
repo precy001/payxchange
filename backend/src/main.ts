@@ -21,9 +21,8 @@ async function bootstrap() {
 
   // Ensure DB pool + Redis close cleanly on SIGTERM/SIGINT.
   app.enableShutdownHooks();
-
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+const port = process.env.PORT ?? 3000;
+await app.listen(port, '0.0.0.0');
   new Logger('Bootstrap').log(`ScanPay backend listening on http://localhost:${port}`);
 }
 bootstrap();
