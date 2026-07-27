@@ -40,23 +40,23 @@ export default function SplashIntro({ onFinish }: { onFinish: () => void }) {
   useEffect(() => {
     if (!ready) return;
     Animated.sequence([
-      // 1) PX logo pops in
+      // 1) PX logo pops in (snappier spring, quicker fade)
       Animated.parallel([
-        Animated.spring(pxScale, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true }),
-        Animated.timing(pxOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+        Animated.spring(pxScale, { toValue: 1, friction: 7, tension: 140, useNativeDriver: true }),
+        Animated.timing(pxOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]),
-      Animated.delay(120),
+      Animated.delay(30),
       // 2) "ay" and "change" unfurl out of the P and X
       Animated.parallel([
         Animated.timing(ayW, {
           toValue: ayWidth,
-          duration: 420,
+          duration: 220,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
         }),
         Animated.timing(changeW, {
           toValue: changeWidth,
-          duration: 620,
+          duration: 300,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
         }),
@@ -64,13 +64,13 @@ export default function SplashIntro({ onFinish }: { onFinish: () => void }) {
       // 3) partner line fades up
       Animated.timing(tagline, {
         toValue: 1,
-        duration: 420,
+        duration: 180,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-      Animated.delay(750),
+      Animated.delay(180),
       // 4) fade the whole intro away
-      Animated.timing(root, { toValue: 0, duration: 320, useNativeDriver: true }),
+      Animated.timing(root, { toValue: 0, duration: 180, useNativeDriver: true }),
     ]).start(() => onFinish());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, ayWidth, changeWidth]);

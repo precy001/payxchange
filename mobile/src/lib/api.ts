@@ -58,7 +58,38 @@ function serverMessage(status: number): string {
   return 'Something went wrong. Please try again.';
 }
 
-async function request<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
+// Refresh the access token using the stored refresh token. Single-flighted so a
+// burst of 401s (many screens loading at once on cold start) triggers exactly
+// one refresh, not a stampede. Returns the new access token, or null if the
+// refresh token is gone/expired (meaning the user really must log in again).
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const refreshToken = await SecureStore.getItemAsync(REFRESH_KEY);
+      if (!refreshToken) return null;
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return null; // refresh token expired/revoked
+      const data = await res.json();
+      if (!data?.accessToken) return null;
+      await saveTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken ?? refreshToken });
+      return data.accessToken as string;
+    } catch {
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function request<T = any>(path: string, options: RequestOptions = {}, _isRetry = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
   // Identify this device so the backend can manage sessions per device.
@@ -98,6 +129,16 @@ async function request<T = any>(path: string, options: RequestOptions = {}): Pro
     throw new ApiError(0, 'No connection to PayXchange. Check your internet and try again.', true);
   } finally {
     clearTimeout(timer);
+  }
+
+  // Access token expired? Transparently refresh once and retry, so reopening the
+  // app after a while doesn't dump you into a blank/logged-out-feeling state.
+  if (res.status === 401 && options.auth && !_isRetry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return request<T>(path, options, true);
+    // Refresh failed — the session is genuinely over; surface it so the app can
+    // send the user to log in.
+    throw new ApiError(401, 'Your session has expired. Please log in again.');
   }
 
   const text = await res.text();
