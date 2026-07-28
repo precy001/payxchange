@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -60,8 +61,23 @@ export default function App() {
     Inter_800ExtraBold,
   });
   const [introDone, setIntroDone] = useState(false);
+  // The animated intro is a first-run welcome — show it once, ever. On every
+  // launch after that we skip straight to the app (Home if logged in, Login if
+  // not). 'undefined' = still checking, so we don't flash the intro then hide it.
+  const [showIntro, setShowIntro] = useState<boolean | undefined>(undefined);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    SecureStore.getItemAsync('px_intro_seen')
+      .then((seen) => setShowIntro(!seen))
+      .catch(() => setShowIntro(false)); // if storage fails, don't block the app
+  }, []);
+
+  const finishIntro = () => {
+    setIntroDone(true);
+    SecureStore.setItemAsync('px_intro_seen', '1').catch(() => undefined);
+  };
+
+  if (!fontsLoaded || showIntro === undefined) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={colors.white} />
@@ -73,7 +89,7 @@ export default function App() {
     <ThemeProvider>
       <View style={{ flex: 1 }}>
         <ThemedApp />
-        {!introDone && <SplashIntro onFinish={() => setIntroDone(true)} />}
+        {showIntro && !introDone && <SplashIntro onFinish={finishIntro} />}
       </View>
     </ThemeProvider>
   );

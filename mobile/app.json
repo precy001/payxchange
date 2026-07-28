@@ -40,7 +40,8 @@
     "updates": {
       "enabled": true,
       "fallbackToCacheTimeout": 0,
-      "checkAutomatically": "ON_LOAD"
+      "checkAutomatically": "ON_LOAD",
+      "url": "https://u.expo.dev/218ae764-a594-4eac-835b-99d68718b0a4"
     },
     "extra": {
       "eas": {

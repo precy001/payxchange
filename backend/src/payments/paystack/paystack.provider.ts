@@ -56,6 +56,9 @@ export class PaystackProvider implements PaymentProvider {
       // immediate verify — and we never bounce the payer to the ngrok page.
       callback_url: 'https://payxchange.app/paid',
       currency: input.currency,
+      // Card only — hide bank transfer / USSD / QR etc. on the hosted checkout,
+      // so saving a card (and future auto-debit) is the single path.
+      channels: ['card'],
     });
     const data = res.data?.data;
     if (!data?.authorization_url) {
