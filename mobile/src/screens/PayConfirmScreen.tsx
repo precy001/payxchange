@@ -134,7 +134,7 @@ export default function PayConfirmScreen() {
                 <Text style={styles.breakdownValue}>{formatNaira(effectiveKobo ?? 0)}</Text>
               </View>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>PayXchange fee</Text>
+                <Text style={styles.breakdownLabel}>Transfer fee</Text>
                 <Text style={styles.breakdownValue}>{formatNaira(computeFeeKobo(effectiveKobo ?? 0))}</Text>
               </View>
               <View style={[styles.breakdownRow, styles.breakdownTotal]}>
