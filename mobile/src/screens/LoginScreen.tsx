@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { normalizePhone, isValidPhone } from '../lib/phone';
+import { getLastPhone } from '../lib/api';
 import { ApiError } from '../lib/api';
 import Button from '../components/Button';
 import { font, radius, spacing } from '../theme';
@@ -29,6 +30,11 @@ export default function LoginScreen() {
 
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
+
+  // Welcome back: prefill the last phone used on this device.
+  useEffect(() => {
+    getLastPhone().then((p) => p && setPhone(p)).catch(() => {});
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

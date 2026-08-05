@@ -8,6 +8,8 @@ import { getDeviceId, getDeviceName } from './device';
 const ACCESS_KEY = 'px_access';
 const REFRESH_KEY = 'px_refresh';
 const PHONE_KEY = 'px_phone';
+const HAS_ACCOUNT_KEY = 'px_has_account'; // persists across logout
+const LAST_PHONE_KEY = 'px_last_phone';   // persists across logout (welcome-back prefill)
 
 export async function saveTokens(t: { accessToken: string; refreshToken: string }) {
   await SecureStore.setItemAsync(ACCESS_KEY, t.accessToken);
@@ -22,6 +24,20 @@ export async function savePhone(phone: string) {
 export async function getStoredPhone() {
   return SecureStore.getItemAsync(PHONE_KEY);
 }
+// Remembers that this device has completed an account (login or registration),
+// so future launches show "Welcome back / log in" instead of the first-run intro
+// and get-started screen. Deliberately NOT cleared on logout.
+export async function markAccountExists(phone?: string) {
+  await SecureStore.setItemAsync(HAS_ACCOUNT_KEY, '1');
+  if (phone) await SecureStore.setItemAsync(LAST_PHONE_KEY, phone);
+}
+export async function getHasAccount(): Promise<boolean> {
+  return (await SecureStore.getItemAsync(HAS_ACCOUNT_KEY)) === '1';
+}
+export async function getLastPhone(): Promise<string | null> {
+  return SecureStore.getItemAsync(LAST_PHONE_KEY);
+}
+
 export async function clearTokens() {
   await SecureStore.deleteItemAsync(ACCESS_KEY);
   await SecureStore.deleteItemAsync(REFRESH_KEY);

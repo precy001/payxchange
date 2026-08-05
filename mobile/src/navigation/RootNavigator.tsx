@@ -60,7 +60,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
-  const { isReady, isAuthed, locked } = useAuth();
+  const { isReady, isAuthed, locked, hasAccount } = useAuth();
   const { colors } = useTheme();
 
   useEffect(() => {
@@ -80,7 +80,10 @@ export default function RootNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false }}
+      initialRouteName={hasAccount ? 'Login' : 'Welcome'}
+    >
       {isAuthed ? (
         <>
           <Stack.Screen name="Tabs" component={TabsNavigator} />

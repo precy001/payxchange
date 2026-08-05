@@ -8,6 +8,8 @@ import {
   getAccessToken,
   clearTokens,
   savePhone,
+  markAccountExists,
+  getHasAccount,
   getStoredPhone,
 } from '../lib/api';
 import { cache } from '../lib/cache';
@@ -18,6 +20,7 @@ type AuthContextValue = {
   isReady: boolean;
   isAuthed: boolean;
   locked: boolean;
+  hasAccount: boolean;
   biometricAvailable: boolean;
   biometricEnabled: boolean;
   login: (phone: string, pin: string) => Promise<void>;
@@ -37,6 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setReady] = useState(false);
   const [isAuthed, setAuthed] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [hasAccount, setHasAccount] = useState(false);
   const [biometricAvailable, setBioAvailable] = useState(false);
   const [biometricEnabled, setBioEnabled] = useState(false);
 
@@ -44,6 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const token = await getAccessToken();
       const authed = !!token;
+      const account = await getHasAccount();
+      setHasAccount(account);
       const available =
         (await LocalAuthentication.hasHardwareAsync()) &&
         (await LocalAuthentication.isEnrolledAsync());
@@ -103,9 +109,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveTokens(tokens);
     setAuthed(true);
     setLocked(false);
+    setHasAccount(true);
     try {
       const me = await api.me();
       if (me?.phone) await savePhone(me.phone);
+      // Remember this device has an account (survives logout → "Welcome back").
+      await markAccountExists(me?.phone);
       if (me) cache.set('me', me); // warm the cache so screens render instantly
     } catch {
       // non-fatal
@@ -157,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         biometricAvailable,
         biometricEnabled,
         login,
+        hasAccount,
         applySession,
         logout,
         tryBiometricUnlock,
