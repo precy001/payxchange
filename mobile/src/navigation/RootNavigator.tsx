@@ -82,7 +82,7 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{ headerShown: false }}
-      initialRouteName={hasAccount ? 'Login' : 'Welcome'}
+      initialRouteName={isAuthed ? 'Tabs' : hasAccount ? 'Login' : 'Welcome'}
     >
       {isAuthed ? (
         <>
