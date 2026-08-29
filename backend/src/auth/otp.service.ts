@@ -37,10 +37,50 @@ export class OtpService {
     return code;
   }
 
-  // MOCK delivery. Replace the body with a real SMS provider call later;
-  // nothing else in the app changes.
+  // Delivers the OTP by SMS via Termii — but only when SMS_LIVE=true. Otherwise
+  // it just logs (free), so local/dev testing never spends SMS credits and the
+  // beta dev-code path keeps working. Turn it on by setting SMS_LIVE=true plus
+  // the Termii credentials in the environment.
   private async deliver(phone: string, code: string): Promise<void> {
-    this.logger.log(`[MOCK SMS] OTP for ${phone} is ${code} (valid 5 minutes)`);
+    const message = `Your PayXchange verification code is ${code}. It expires in 5 minutes. Do not share this code with anyone.`;
+
+    const live = process.env.SMS_LIVE === 'true';
+    const apiKey = process.env.TERMII_API_KEY;
+    const senderId = process.env.TERMII_SENDER_ID;
+    const baseUrl = process.env.TERMII_BASE_URL ?? 'https://v3.api.termii.com';
+
+    if (!live || !apiKey || !senderId) {
+      // Not sending for real — log it (still readable in the server logs, and the
+      // register response returns the code in non-production for beta testers).
+      this.logger.log(`[SMS mock] OTP for ${phone} is ${code} (valid 5 minutes)`);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${baseUrl}/api/sms/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: phone.replace(/^\+/, ''), // Termii wants digits, no leading +
+          from: senderId,
+          sms: message,
+          type: 'plain',
+          channel: 'generic',
+          api_key: apiKey,
+        }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      // Termii returns { code: 'ok', message_id, ... } on success.
+      if (!res.ok || (data?.code && data.code !== 'ok')) {
+        this.logger.error(`[Termii] send failed for ${phone}: ${JSON.stringify(data)}`);
+      } else {
+        this.logger.log(`[Termii] OTP sent to ${phone} (message_id=${data?.message_id ?? 'n/a'})`);
+      }
+    } catch (err: any) {
+      // Never let an SMS hiccup crash registration; the code is still valid and
+      // (in beta) returned to the app.
+      this.logger.error(`[Termii] send error for ${phone}: ${err?.message}`);
+    }
   }
 
   async verifyCode(phone: string, code: string): Promise<VerifyResult> {
