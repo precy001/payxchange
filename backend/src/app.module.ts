@@ -17,6 +17,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { PayoutDestinationsModule } from './payout-destinations/payout-destinations.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -42,6 +43,7 @@ import { HealthController } from './health/health.controller';
     DisputesModule,
     PayoutDestinationsModule,
     ReferralsModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [
