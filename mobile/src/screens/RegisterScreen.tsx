@@ -27,6 +27,7 @@ export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -42,6 +43,7 @@ export default function RegisterScreen() {
       const res = await api.register({
         phone: normalizePhone(phone),
         fullName: fullName.trim(),
+        referralCode: referralCode.trim() ? referralCode.trim().toUpperCase() : undefined,
         email: email.trim() || undefined,
       });
       navigation.navigate('Otp', { phone: normalizePhone(phone), devCode: res?.devCode });
@@ -97,6 +99,18 @@ export default function RegisterScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+          />
+
+          <Text style={[styles.label, { marginTop: spacing.lg }]}>Referral code (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={referralCode}
+            onChangeText={(t) => setReferralCode(t.toUpperCase())}
+            placeholder="e.g. ADA4X7"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={12}
           />
 
           {error ? (

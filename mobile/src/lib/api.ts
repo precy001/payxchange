@@ -181,7 +181,7 @@ export const api = {
   login: (phone: string, pin: string) =>
     request('/auth/login', { method: 'POST', body: { phone, pin } }),
 
-  register: (input: { phone: string; fullName?: string; email?: string }) =>
+  register: (input: { phone: string; fullName?: string; email?: string; referralCode?: string }) =>
     request('/auth/register', { method: 'POST', body: input }),
 
   verifyOtp: (phone: string, code: string) =>
@@ -194,6 +194,9 @@ export const api = {
 
   myCards: () => request('/funding-sources/me', { auth: true }),
   removeCard: (id: string) => request(`/funding-sources/${id}`, { method: 'DELETE', auth: true }),
+
+  referralSummary: () => request('/referrals/me', { auth: true }),
+  claimReferral: () => request('/referrals/claim', { method: 'POST', auth: true }),
 
   listBanks: () => request('/payout-destinations/banks', { auth: true }),
   resolvePayoutAccount: (accountNumber: string, bankCode: string) =>

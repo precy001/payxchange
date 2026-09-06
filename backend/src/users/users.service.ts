@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { RegisterUserDto } from './dto/register-user.dto';
+import { ReferralsService } from '../referrals/referrals.service';
 import { UserRow, UsersRepository } from './users.repository';
 
 // What we expose to the outside — note we never leak internal columns we don't
@@ -20,15 +21,23 @@ const UNIQUE_VIOLATION = '23505'; // Postgres error code for a duplicate key
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly repo: UsersRepository) {}
+  constructor(private readonly repo: UsersRepository,
+    private readonly referrals: ReferralsService,
+  ) {}
 
-  async register(dto: RegisterUserDto): Promise<PublicUser> {
+  async register(dto: RegisterUserDto & { referralCode?: string }): Promise<PublicUser> {
     try {
-      const user = await this.repo.createWithAudit({
-        phone: dto.phone,
-        email: dto.email,
-        fullName: dto.fullName,
-      });
+      const user = await this.repo.createWithAudit(
+        {
+          phone: dto.phone,
+          email: dto.email,
+          fullName: dto.fullName,
+        },
+        // If a referral code was entered, record the referral atomically.
+        dto.referralCode
+          ? (client, userId) => this.referrals.applyReferralCode(client, dto.referralCode!, userId)
+          : undefined,
+      );
       return this.toPublic(user);
     } catch (err: any) {
       // The DB's UNIQUE constraint on phone is the real guard against duplicate

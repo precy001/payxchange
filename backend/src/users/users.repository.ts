@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PoolClient } from 'pg';
 import { DatabaseService } from '../infra/database.module';
 
 export interface UserRow {
@@ -20,11 +21,16 @@ const COLS = `id, phone, email, full_name, kyc, phone_verified, avatar, deactiva
 export class UsersRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  async createWithAudit(input: {
-    phone: string;
-    email?: string;
-    fullName?: string;
-  }): Promise<UserRow> {
+  async createWithAudit(
+    input: {
+      phone: string;
+      email?: string;
+      fullName?: string;
+    },
+    // Runs inside the same transaction as the insert (e.g. to record a referral),
+    // so signup + referral either both commit or both roll back.
+    onCreate?: (client: PoolClient, userId: string) => Promise<void>,
+  ): Promise<UserRow> {
     return this.db.withTransaction(async (client) => {
       const inserted = await client.query<UserRow>(
         `INSERT INTO users (phone, email, full_name)
@@ -39,6 +45,8 @@ export class UsersRepository {
          VALUES ($1, $2, $3, $4, $5)`,
         [user.id, 'user.registered', 'user', user.id, JSON.stringify({ phone: input.phone })],
       );
+
+      if (onCreate) await onCreate(client, user.id);
 
       return user;
     });

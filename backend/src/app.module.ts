@@ -16,6 +16,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { PayoutDestinationsModule } from './payout-destinations/payout-destinations.module';
+import { ReferralsModule } from './referrals/referrals.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -40,6 +41,7 @@ import { HealthController } from './health/health.controller';
     NotificationsModule,
     DisputesModule,
     PayoutDestinationsModule,
+    ReferralsModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -25,6 +25,11 @@ export class RegisterDto {
   @IsString()
   @Length(2, 120)
   fullName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(4, 12)
+  referralCode?: string;
 }
 
 export class VerifyOtpDto {

@@ -7,6 +7,7 @@ import {
 } from '../payments/payment-provider.interface';
 import { UsersRepository } from '../users/users.repository';
 import { PayoutDestinationsRepository } from '../payout-destinations/payout-destinations.repository';
+import { ReferralsService } from '../referrals/referrals.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionRow, TransactionsRepository } from './transactions.repository';
 
@@ -34,6 +35,7 @@ export class PayoutService {
     private readonly txns: TransactionsRepository,
     private readonly users: UsersRepository,
     private readonly payoutDestinations: PayoutDestinationsRepository,
+    private readonly referrals: ReferralsService,
     private readonly notifications: NotificationsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
@@ -41,6 +43,9 @@ export class PayoutService {
   // Fire "you received" to the payee and "payment successful" to the payer.
   // Best-effort; never blocks or fails the payout.
   private async notifyCompletion(txn: TransactionRow) {
+    // The payer just completed a transaction — if they were referred, this
+    // qualifies that referral. Best-effort; never block completion on it.
+    this.referrals.onTransactionCompleted(txn.payer_user_id).catch(() => undefined);
     try {
       const [payer, payee] = await Promise.all([
         this.users.findById(txn.payer_user_id),

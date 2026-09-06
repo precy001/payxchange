@@ -43,6 +43,7 @@ export class AuthService {
         phone: dto.phone,
         email: dto.email,
         fullName: dto.fullName,
+        referralCode: dto.referralCode,
       });
       const code = await this.otp.sendCode(dto.phone);
       return { message: 'Verification code sent', userId: user.id, ...this.devCode(code) };

@@ -159,6 +159,12 @@ export default function ProfileScreen() {
         />
         <View style={styles.divider} />
         <Row
+          icon="gift-outline"
+          label="Refer & Earn ₦15,000"
+          onPress={() => navigation.navigate('Referral')}
+        />
+        <View style={styles.divider} />
+        <Row
           icon="star-outline"
           label="Rate PayXchange"
           onPress={() => openStoreReview()}
