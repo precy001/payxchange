@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "269942d7-b496-4872-87fd-aae2a7a4b0b6"
+      }
+    },
+    "android": {
+      "package": "com.ultimatedev.scanpaybackend"
+    }
+  }
+}
