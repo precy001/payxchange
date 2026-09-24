@@ -56,7 +56,7 @@ async createCheckoutOrder(input: CreateCheckoutInput): Promise<CheckoutOrderResu
       amount: input.amountKobo,
       reference: input.orderReference,
       callback_url: 'https://payxchange.app/paid',
-      currency: input.currency,
+      currency: 'NGN',
     });
   } catch (err: any) {
     const body = err?.response?.data;
