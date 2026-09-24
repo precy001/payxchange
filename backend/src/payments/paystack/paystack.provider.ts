@@ -46,42 +46,53 @@ export class PaystackProvider implements PaymentProvider {
   }
 
   // Inbound: initialize a transaction and return the hosted checkout URL.
-  async createCheckoutOrder(input: CreateCheckoutInput): Promise<CheckoutOrderResult> {
-    let res;
-    try {
-      res = await this.http.post('/transaction/initialize', {
-        email: input.customerEmail,
-        amount: input.amountKobo, // kobo
-        reference: input.orderReference,
-        // Browser redirect after payment. We point it at a marker the app's
-        // WebView detects (it is NOT loaded), so payment finishing triggers an
-        // immediate verify — and we never bounce the payer to the ngrok page.
-        callback_url: 'https://payxchange.app/paid',
-        currency: input.currency,
-        // Card only — hide bank transfer / USSD / QR etc. on the hosted checkout,
-        // so saving a card (and future auto-debit) is the single path.
-        channels: ['card'],
-      });
-    } catch (err: any) {
-      // Surface Paystack's actual reason instead of a bare AxiosError — this is
-      // the difference between "status code 400" and knowing WHY.
-      const body = err?.response?.data;
-      this.logger.error(
-        `[paystack] /transaction/initialize failed ref=${input.orderReference} status=${err?.response?.status} body=${JSON.stringify(body)}`,
-      );
-      throw new Error(body?.message ?? 'Paystack checkout initialization failed');
-    }
-    const data = res.data?.data;
-    if (!data?.authorization_url) {
-      throw new Error(`Paystack init failed: ${res.data?.message ?? 'no authorization_url'}`);
-    }
-    this.logger.log(`[paystack] /transaction/initialize ref=${input.orderReference} status=${res.data?.status}`);
-    return {
-      checkoutUrl: data.authorization_url,
-      orderReference: data.reference ?? input.orderReference,
-      raw: res.data,
-    };
+  // Inbound: initialize a transaction and return the hosted checkout URL.
+async createCheckoutOrder(input: CreateCheckoutInput): Promise<CheckoutOrderResult> {
+  let res;
+
+  try {
+    res = await this.http.post('/transaction/initialize', {
+      email: input.customerEmail,
+      amount: input.amountKobo,
+      reference: input.orderReference,
+      callback_url: 'https://payxchange.app/paid',
+      currency: input.currency,
+    });
+  } catch (err: any) {
+    const body = err?.response?.data;
+
+    this.logger.error(
+      `[paystack] /transaction/initialize failed ` +
+        `ref=${input.orderReference} ` +
+        `status=${err?.response?.status} ` +
+        `body=${JSON.stringify(body)}`,
+    );
+
+    throw new Error(
+      body?.message ?? 'Paystack checkout initialization failed',
+    );
   }
+
+  const data = res.data?.data;
+
+  if (!data?.authorization_url) {
+    throw new Error(
+      `Paystack init failed: ${res.data?.message ?? 'no authorization_url'}`,
+    );
+  }
+
+  this.logger.log(
+    `[paystack] /transaction/initialize ` +
+      `ref=${input.orderReference} ` +
+      `status=${res.data?.status}`,
+  );
+
+  return {
+    checkoutUrl: data.authorization_url,
+    orderReference: data.reference ?? input.orderReference,
+    raw: res.data,
+  };
+}
 
   // Ask Paystack directly whether this reference was paid — no webhook needed.
   // Also returns the reusable card token so future payments can be auto-charged.
